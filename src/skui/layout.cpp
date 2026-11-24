@@ -21,10 +21,9 @@ struct PreferenceRow {
         pressed=ImGui::InvisibleButton(id,ImVec2(ImGui::GetContentRegionAvail().x,height));
         detail::AllowScroll(); max=ImGui::GetItemRectMax();
         auto *draw=ImGui::GetWindowDrawList();
-        float hover=detail::Animate(ImHashStr("hover",0,ImGui::GetItemID()),
-                                   ImGui::IsItemHovered() ? 1.f : 0.f,.12f);
-        if(hover>0) {
-            auto color=GetTheme().accent; color.w=hover*(ImGui::IsItemActive() ? .12f : .05f);
+        float feedback=detail::InteractionFeedback(.05f,.12f);
+        if(feedback>0) {
+            auto color=GetTheme().accent; color.w=feedback;
             draw->AddRectFilled(min,max,U(color),Dp(14));
         }
         float left=Dp(icon==Icon::None ? 2 : 38), right=reserve_end ? Dp(46) : Dp(4);
@@ -72,8 +71,9 @@ bool Navigation(const char *id,const NavItem *items,int count,int *selected,bool
         if(ImGui::InvisibleButton("item",ImVec2(width,Dp(58)))) { changed=*selected!=i; *selected=i; }
         float a=detail::Animate("selected",*selected==i ? 1.f : 0.f);
         auto color=ImLerp(MutedColor(),GetTheme().accent,a);
-        if(a>0 || ImGui::IsItemHovered()) {
-            auto bg=GetTheme().accent; bg.w=std::max(.12f*a,ImGui::IsItemHovered() ? .06f : 0.f);
+        float feedback=detail::InteractionFeedback(.06f,.18f);
+        if(a>0 || feedback>0) {
+            auto bg=GetTheme().accent; bg.w=std::max(.12f*a,feedback);
             ImGui::GetWindowDrawList()->AddRectFilled(p,At(p,width,Dp(56)),U(bg),Dp(18));
         }
         DrawIcon(items[i].icon,At(p,rail ? Dp(22) : width/2,Dp(rail ? 28 : 18)),Dp(22),U(color));
@@ -191,8 +191,9 @@ bool NavigationRail(const char *id,const NavItem *items,int count,int *selected,
         }
         float a=detail::Animate("selected",*selected==i ? 1.f : 0.f);
         auto color=ImLerp(MutedColor(),GetTheme().accent,a);
-        if(a>0 || ImGui::IsItemHovered()) {
-            auto bg=GetTheme().accent; bg.w=std::max(.12f*a,ImGui::IsItemHovered() ? .06f : 0.f);
+        float feedback=detail::InteractionFeedback(.06f,.18f);
+        if(a>0 || feedback>0) {
+            auto bg=GetTheme().accent; bg.w=std::max(.12f*a,feedback);
             float inset=Dp(8*(1-progress));
             draw->AddRectFilled(At(p,inset,0),At(p,width-inset,Dp(32+24*progress)),U(bg),Dp(16));
         }

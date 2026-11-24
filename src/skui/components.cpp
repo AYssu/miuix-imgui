@@ -36,10 +36,10 @@ bool Choice(const ChoiceItem &item, bool selected, int index) {
     detail::AllowScroll();
     auto *draw = ImGui::GetWindowDrawList();
     float selection=detail::Animate("selection",selected ? 1.f : 0.f);
-    float hover=detail::Animate("hover",ImGui::IsItemHovered() ? 1.f : 0.f,.12f);
-    if (selection>0 || hover>0) {
+    float feedback=detail::InteractionFeedback(.06f,.18f);
+    if (selection>0 || feedback>0) {
         auto color = GetTheme().accent;
-        color.w = std::max(.12f*selection,hover*(ImGui::IsItemActive() ? .18f : .06f));
+        color.w = std::max(.12f*selection,feedback);
         draw->AddRectFilled(Offset(p,Dp(2),0), Offset(ImGui::GetItemRectMax(),-Dp(2),0),
                             U(color), Dp(14));
     }
@@ -592,7 +592,7 @@ bool FloatingActionButton(const char *id, Icon icon, ImVec2 position, bool visib
     auto p = ImGui::GetCursorScreenPos();
     bool pressed = ImGui::InvisibleButton("action", ImVec2(Dp(48), Dp(48)));
     auto color = GetTheme().accent;
-    float dim=detail::Animate("press",ImGui::IsItemActive() ? .15f : 0.f,.12f);
+    float dim=detail::InteractionFeedback(0.f,.15f);
     color.x*=1-dim; color.y*=1-dim; color.z*=1-dim;
     ImGui::GetWindowDrawList()->AddRectFilled(p, Offset(p, Dp(48), Dp(48)), U(color), Dp(22));
     DrawIcon(icon, Offset(p, Dp(24), Dp(24)), Dp(24), U(ImVec4(1, 1, 1, 1)));

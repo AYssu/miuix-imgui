@@ -63,8 +63,7 @@ struct Row {
         AllowScroll();
         max = ImGui::GetItemRectMax();
         hovered = ImGui::IsItemHovered();
-        float a = detail::Animate(ImHashStr("press",0,ImGui::GetItemID()),
-                                 hovered && ImGui::IsMouseDown(0) ? 1.f : 0.f,.12f);
+        float a = detail::InteractionFeedback(0.f,1.f);
         auto color = Color(0xF0F3FA, 0x30343E); color.w *= a;
         if (a > 0) ImGui::GetWindowDrawList()->AddRectFilled(min, max, U(color), Dp(10));
     }
@@ -114,6 +113,14 @@ float Animate(ImGuiID id, float target, float seconds, float initial) {
     s->SetFloat(key("motion/elapsed"), elapsed);
     s->SetInt(key("motion/frame"), frame);
     return value;
+}
+float InteractionFeedback(float hover, float press) {
+    const bool hovered=ImGui::IsItemHovered();
+    const bool held=ImGui::IsItemActive() &&
+        (hovered || GImGui->ActiveIdSource==ImGuiInputSource_Keyboard ||
+                    GImGui->ActiveIdSource==ImGuiInputSource_Gamepad);
+    const bool mouse_hover=hovered && ImGui::GetIO().MouseSource!=ImGuiMouseSource_TouchScreen;
+    return Animate(ImHashStr("feedback",0,ImGui::GetItemID()),held ? press : mouse_hover ? hover : 0.f,.12f);
 }
 void BeginInert(bool inert, bool clear_window_active) {
     auto &g=*GImGui;
@@ -439,8 +446,7 @@ bool Button(const char *label, Tone tone, ImVec2 size) {
     ImGui::PushStyleColor(ImGuiCol_Text, fg);
     bool clicked = ImGui::Button(label, size);
     AllowScroll();
-    float dim=detail::Animate(ImHashStr("press",0,ImGui::GetItemID()),
-                              ImGui::IsItemActive() ? .15f : ImGui::IsItemHovered() ? .06f : 0.f,.12f);
+    float dim=detail::InteractionFeedback(.06f,.15f);
     bg.x*=1-dim; bg.y*=1-dim; bg.z*=1-dim;
     ImU32 color=U(bg);
     for(int i=first;i<last;++i) {
@@ -454,7 +460,7 @@ bool Button(const char *label, Tone tone, ImVec2 size) {
 bool IconButton(const char *id, Icon icon) {
     ImVec2 p = ImGui::GetCursorScreenPos();
     bool clicked = ImGui::InvisibleButton(id, ImVec2(Dp(36), Dp(36)));
-    float a=detail::Animate(ImHashStr("hover",0,ImGui::GetItemID()),ImGui::IsItemHovered() ? 1.f : 0.f,.12f);
+    float a=detail::InteractionFeedback(.5f,1.f);
     auto bg=Color(0xE6E9EF, 0x353943); bg.w*=a;
     if (a>0)
         ImGui::GetWindowDrawList()->AddRectFilled(p, Add(p, Dp(36), Dp(36)), U(bg),

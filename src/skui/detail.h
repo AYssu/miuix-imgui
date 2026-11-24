@@ -10,6 +10,8 @@ inline float Animate(const char *key, float target, float seconds = .22f,
                      float initial = std::numeric_limits<float>::quiet_NaN()) {
     return Animate(ImGui::GetID(key), target, seconds, initial);
 }
+// Paint the last item's owned press; a released touch position is not a hover.
+float InteractionFeedback(float hover, float press);
 // Exclude input during exit without introducing the disabled-state gray tint.
 void BeginInert(bool inert, bool clear_window_active = true);
 void EndInert();

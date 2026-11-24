@@ -1,5 +1,6 @@
 #include "skui/skui.h"
 #include "imgui_internal.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -538,6 +539,131 @@ void MenuExitFrameTests() {
     }
     CHECK(closed);
     std::puts("PASS menu exit: no opaque background in final dismissal frame");
+}
+void TouchFeedbackTests() {
+    for(int kind=0;kind<7;++kind) for(int fps:{30,60,120}) {
+        Interaction h;h.animations=true;
+        auto &io=ImGui::GetIO();io.DeltaTime=1.f/fps;
+        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        std::vector<ImU32> colors;
+        int selected=0;
+        const skui::NavItem items[]={{"home",skui::Icon::None},{"other",skui::Icon::None}};
+        auto draw=[&] {
+            auto *list=ImGui::GetWindowDrawList();int first=list->VtxBuffer.Size;
+            if(kind==0) skui::Button("button");
+            if(kind==1) skui::IconButton("icon",skui::Icon::None);
+            if(kind==2) skui::BasicComponent("basic","preference");
+            if(kind==3) skui::ListItem("row","list item");
+            if(kind==4) skui::NavigationBar("bar",items,2,&selected);
+            if(kind==5) skui::NavigationRail("rail",items,2,&selected);
+            if(kind==6) skui::CheckboxPreference("checkbox",&h.ui.value);
+            colors.clear();
+            for(int i=first;i<list->VtxBuffer.Size;++i) colors.push_back(list->VtxBuffer[i].col);
+        };
+        h.Frame(draw);h.Frame(draw);
+        // A resting finger coordinate is not a mouse hover.
+        h.Frame(draw,36,32);auto rest=colors;
+        for(int i=0;i<fps/4;++i) h.Frame(draw,36,32);
+        CHECK(colors==rest);
+        h.Frame(draw,36,32,true);
+        for(int i=0;i<fps/4;++i) h.Frame(draw,36,32,true);
+        CHECK(colors!=rest);
+        // Dragging off cancels the visual press and releasing off does not act.
+        for(int i=0;i<fps/4;++i) h.Frame(draw,720,850,true);
+        CHECK(colors==rest);
+        h.Frame(draw,720,850,false);CHECK(!h.ui.value && selected==0);
+        h.Frame(draw,36,32,true);
+        for(int i=0;i<fps/4;++i) h.Frame(draw,36,32,true);
+        h.Frame(draw,36,32,false);
+        // Keep a selection control's business state constant for the paint comparison.
+        h.ui.value=false;
+        for(int i=0;i<fps/2;++i) h.Frame(draw,36,32);
+        CHECK(colors==rest);
+        io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
+        h.Frame(draw,37,32); // Source changes accompany a real pointer event.
+        for(int i=0;i<fps/4;++i) h.Frame(draw,36,32);
+        if(kind<3 || kind==6) CHECK(colors!=rest); // Selected navigation backgrounds mask the weaker hover.
+        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        h.Frame(draw,37,32);
+        for(int i=0;i<fps/4;++i) h.Frame(draw,36,32);
+        CHECK(colors==rest);
+    }
+    Interaction h;h.animations=true;
+    ImGui::GetIO().AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+    const skui::ChoiceItem choices[]={{"first"},{"second"},{"disabled",nullptr,skui::Icon::None,false}};
+    bool values[]={true,false,false};std::vector<ImU32> colors;
+    auto menu=[&] {skui::MultiSelect("choices",values,choices,3);};
+    auto snapshot=[&] {
+        colors.clear();
+        for(auto *child:h.Popup()->DC.ChildWindows) if(child->Active)
+            for(const auto &v:child->DrawList->VtxBuffer) colors.push_back(v.col);
+    };
+    h.Frame(menu);h.Frame(menu);h.Click(menu,60,36);
+    for(int i=0;i<30;++i) h.Frame(menu);
+    CHECK(h.Popup());snapshot();auto rest=colors;
+    auto *options=h.Popup()->DC.ChildWindows[0];auto p=options->DC.CursorStartPos;
+    float x=p.x+60,y=p.y+46+ImGui::GetStyle().ItemSpacing.y+23;
+    for(int i=0;i<15;++i) h.Frame(menu,x,y);
+    snapshot();CHECK(colors==rest);
+    for(int i=0;i<15;++i) h.Frame(menu,x,y,true);
+    snapshot();CHECK(colors!=rest);
+    h.Frame(menu,x,y,false);CHECK(values[1]);values[1]=false;
+    for(int i=0;i<30;++i) h.Frame(menu,x,y);
+    snapshot();CHECK(colors==rest && values[0]); // Retain the genuine selected highlight.
+    y+=46+ImGui::GetStyle().ItemSpacing.y;
+    for(int i=0;i<15;++i) h.Frame(menu,x,y,true);
+    snapshot();CHECK(colors==rest);
+    h.Frame(menu,x,y,false);CHECK(!values[2]);
+    std::puts("PASS touch feedback: no sticky hover, press cancellation, release fade and mouse hover at 30/60/120Hz; menu selection and disabled rows");
+}
+void FeedbackRoundingTests() {
+    // Sample actual triangles AND atlas alpha: baked 1.93 corners use square
+    // geometry with texture coverage, while fractional radii use AA vertices.
+    auto coverage=[](ImDrawList *list,int first,int last,ImVec2 p) {
+        float result=0;
+        auto cross=[](ImVec2 a,ImVec2 b,ImVec2 c) {
+            return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+        };
+        auto *texture=ImGui::GetIO().Fonts->TexData;
+        for(const auto &cmd:list->CmdBuffer) for(unsigned i=0;i+2<cmd.ElemCount;i+=3) {
+            unsigned ia=cmd.VtxOffset+list->IdxBuffer[cmd.IdxOffset+i];
+            unsigned ib=cmd.VtxOffset+list->IdxBuffer[cmd.IdxOffset+i+1];
+            unsigned ic=cmd.VtxOffset+list->IdxBuffer[cmd.IdxOffset+i+2];
+            if(ia<static_cast<unsigned>(first) || ib<static_cast<unsigned>(first) || ic<static_cast<unsigned>(first) ||
+               ia>=static_cast<unsigned>(last) || ib>=static_cast<unsigned>(last) || ic>=static_cast<unsigned>(last)) continue;
+            auto a=list->VtxBuffer[ia],b=list->VtxBuffer[ib],c=list->VtxBuffer[ic];
+            float area=cross(a.pos,b.pos,c.pos);if(std::abs(area)<1e-6f) continue;
+            float x=cross(b.pos,c.pos,p)/area,y=cross(c.pos,a.pos,p)/area,z=1-x-y;
+            if(x<0 || y<0 || z<0) continue;
+            float u=a.uv.x*x+b.uv.x*y+c.uv.x*z,v=a.uv.y*x+b.uv.y*y+c.uv.y*z;
+            int tx=std::clamp(static_cast<int>(u*texture->Width),0,texture->Width-1);
+            int ty=std::clamp(static_cast<int>(v*texture->Height),0,texture->Height-1);
+            auto *pixel=static_cast<unsigned char *>(texture->GetPixelsAt(tx,ty));
+            float alpha=pixel[texture->Format==ImTextureFormat_RGBA32 ? 3 : 0]/255.f;
+            alpha*=(x*((a.col>>IM_COL32_A_SHIFT)&255u)+y*((b.col>>IM_COL32_A_SHIFT)&255u)+z*((c.col>>IM_COL32_A_SHIFT)&255u))/255.f;
+            result=std::max(result,alpha);
+        }
+        return result;
+    };
+    for(float scale:{1.f,2.2f}) for(bool dark:{false,true}) for(bool baked:{false,true}) {
+        Interaction h;
+        auto draw=[&] {
+            skui::Theme theme;theme.scale=scale;theme.dark=dark;theme.animations=false;skui::ApplyTheme(theme);
+            auto *list=ImGui::GetWindowDrawList();
+            list->PushDrawFlag(ImDrawFlags_UseTexForRoundCorners,baked);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha,.5f);
+            int first=list->VtxBuffer.Size;
+            skui::Button("rounded",skui::Tone::Primary,ImVec2(200,skui::Dp(44)));
+            auto min=ImGui::GetItemRectMin(),max=ImGui::GetItemRectMax();int last=list->VtxBuffer.Size;
+            CHECK(coverage(list,first,last,ImVec2(min.x+.5f,min.y+.5f))<.05f);
+            CHECK(coverage(list,first,last,ImVec2(max.x-.5f,max.y-.5f))<.05f);
+            float top=coverage(list,first,last,ImVec2((min.x+max.x)/2,min.y+2));
+            CHECK(top>.45f && top<.55f); // Fade is applied once, including baked corners.
+            ImGui::PopStyleVar();list->PopDrawFlag();
+        };
+        h.Frame(draw);h.Frame(draw,45,32,true);h.Frame(draw,45,32,false);
+    }
+    std::puts("PASS feedback rounding: transparent corners, texture/vertex AA, light/dark, fractional scale and fade alpha");
 }
 void ColorPreviewFrameTests() {
     Interaction h;
@@ -1265,6 +1391,8 @@ int main() {
     SelectionTests();
     OverlayMotionTests();
     MenuExitFrameTests();
+    TouchFeedbackTests();
+    FeedbackRoundingTests();
     ColorPreviewFrameTests();
     ContinuousColorTests();
     PickerMotionTests();
