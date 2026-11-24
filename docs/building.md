@@ -23,6 +23,7 @@ ctest --test-dir build/host --output-on-failure
 
 本地和 CI 参考配置：JDK 17、NDK `28.2.13676358`、SDK platform `36`、
 build-tools `36.0.0`、`arm64-v8a`、原生 API 28、静态 libc++、Release。
+CI 显式安装 command-line tools 16.0（`13114758`），不依赖 runner 预装 Android SDK。
 SDK 编译平台不等于最低设备 API；输入辅助 APK 的 minSdk 为 28、targetSdk 为 36。
 
 已安装 Android command-line tools 后执行：
