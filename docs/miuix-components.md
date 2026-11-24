@@ -15,7 +15,7 @@ Demo 首页提供浮动选择、Glass 与 Window 分类的直接入口，目录�
 | NavigationBar | NavigationBar：独立横向导航与选中状态 |
 | NavigationRail | NavigationRail：独立纵向导航、可选折叠按钮、宽度与图标/标签过渡；示例包含联动内容区，宽屏壳共用该组件 |
 | TabRow | TabBar |
-| BreadcrumbBar | BreadcrumbBar：点击与横向触摸滚动 |
+| BreadcrumbBar | 32dp 胶囊、浅色高亮、箭头分隔、名称省略、横向触摸滚动与高亮项定位 |
 | Card | BeginCard / EndCard |
 | BasicComponent | BasicComponent：标题、摘要、图标、尾部值与箭头 |
 | Button | Button：Primary / Neutral / Danger、禁用与取消点击 |
@@ -92,6 +92,15 @@ Glass 按模糊强度调整采样密度；零模糊优先保留原始清晰度�
 尚未逐项复制 Compose 的所有可配置参数、着色器及系统导航手势。
 
 新增与修改组件的动画要求见 [组件开发规范](component-development.md)，宿主调用约定见 [接入规范](integration.md)。
+
+## 面包屑
+
+BreadcrumbBar 对照 Miuix 提交 `07d4859021d7aed1a1f78afaee12c5c8a6917466` 的同名组件：
+胶囊高 32dp、文字 14dp、水平内边距 10dp、单项最大宽度 160dp；条带外留白水平 12dp / 垂直 8dp。
+普通胶囊取正文色 10% 透明度，高亮取主题色 20% 透明度，文字分别为正文色 55% 与主题色。
+箭头占宽 18dp，超长名称单行省略，长路径横向滚动且隐藏滚动条；当前字体由宿主管理，不自动加载 Medium 字重。
+首次显示定位高亮项，改变高亮时平滑滚动，拖动会取消自动定位；关闭动画则立即定位。
+不实现 Compose 的 LazyRow、边缘弹性及惯性滚动；短反馈与定位沿用本项目动画曲线。
 
 ## 浮动选择
 

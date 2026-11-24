@@ -216,6 +216,93 @@ struct Interaction {
         return GImGui->OpenPopupStack.back().Window;
     }
 };
+void BreadcrumbTests() {
+    Interaction h;int selected=2,changes=0;bool changed=false,enabled=true;
+    const char *labels[]={"Root","Documents","Current"};
+    auto draw=[&] {changed=skui::BreadcrumbBar("path",labels,3,&selected,enabled);changes+=changed;};
+    h.Frame(draw);h.Frame(draw);
+    CHECK(std::abs(h.max.y-h.min.y-48)<.01f);
+    auto *parent=ImGui::FindWindowByName("interactions");
+    auto *bar=parent->DC.ChildWindows.back();
+    CHECK((bar->Flags&ImGuiWindowFlags_NoScrollbar) && bar->ScrollMax.x==0 && bar->ScrollMax.y==0);
+    CHECK(std::abs(bar->Size.y-32)<.01f);
+    auto highlight=skui::GetTheme().accent;highlight.w=.2f;
+    bool subtle=false,opaque=false;
+    for(const auto &v:bar->DrawList->VtxBuffer) {
+        subtle|=v.col==ImGui::GetColorU32(highlight);
+        opaque|=v.col==ImGui::GetColorU32(skui::GetTheme().accent);
+    }
+    CHECK(subtle && opaque); // Soft capsule and accent text, not a solid button.
+    auto p=bar->DC.CursorStartPos;
+    h.Click(draw,p.x+20,p.y+16);CHECK(selected==0 && changes==1);
+    h.Click(draw,p.x+20,p.y+16);CHECK(!changed && changes==1);
+    enabled=false;h.Click(draw,p.x+100,p.y+16);CHECK(selected==0 && changes==1);
+    enabled=true;
+    h.Frame(draw,p.x+20,p.y+16);h.Frame(draw,p.x+20,p.y+16,true);
+    h.Frame(draw,750,850,false);CHECK(selected==0 && changes==1);
+    std::puts("PASS breadcrumb: capsule geometry, translucent highlight, hidden scrollbars and path selection");
+}
+void BreadcrumbOverflowTests() {
+    for(int fps:{30,60,120}) {
+        Interaction h;h.animations=true;ImGui::GetIO().DeltaTime=1.f/fps;
+        ImGui::GetIO().AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        const char *labels[]={"Internal storage","Documents archive","Images collection","Projects folder",
+            "A directory with an exceptionally long name that needs an ellipsis","Current directory"};
+        int selected=5,count=6;bool enabled=true;
+        auto draw=[&] {skui::BreadcrumbBar("path",labels,count,&selected,enabled);};
+        auto bar=[] {return ImGui::FindWindowByName("interactions")->DC.ChildWindows.back();};
+        h.Frame(draw);h.Frame(draw);auto *window=bar();
+        CHECK(window->ScrollMax.x>100 && std::abs(window->Scroll.x-window->ScrollMax.x)<1);
+        CHECK(window->ScrollMax.y==0 && !window->ScrollbarX && !window->ScrollbarY);
+        CHECK(window->ContentSize.x<=6*160+5*18+1);
+        float previous=window->Scroll.x;selected=0;h.Frame(draw);
+        CHECK(window->Scroll.x<previous && window->Scroll.x>0); // Scrolls smoothly toward root.
+        for(int i=0;i<fps/2;++i) h.Frame(draw);
+        CHECK(window->Scroll.x==0);
+        selected=5;h.Frame(draw);CHECK(window->Scroll.x>0 && window->Scroll.x<previous);
+        for(int i=0;i<fps/2;++i) h.Frame(draw);
+        CHECK(std::abs(window->Scroll.x-window->ScrollMax.x)<1);
+        selected=0;h.Frame(draw);float reversing=window->Scroll.x;selected=5;h.Frame(draw);
+        CHECK(window->Scroll.x>=reversing && window->Scroll.x<window->ScrollMax.x);
+        for(int i=0;i<fps/2;++i) h.Frame(draw);
+        float x=window->Pos.x+60,y=window->Pos.y+16;
+        h.Frame(draw,x,y);h.Frame(draw,x,y,true);previous=window->Scroll.x;
+        h.Frame(draw,x+80,y,true);CHECK(std::abs(window->Scroll.x-(previous-80))<1);
+        h.Frame(draw,x+80,y,false);CHECK(selected==5); // Drag cancels activation.
+        previous=window->Scroll.x;for(int i=0;i<fps/2;++i) h.Frame(draw);
+        CHECK(window->Scroll.x==previous); // Manual position is not pulled back.
+        enabled=false;
+        h.Frame(draw,x,y);h.Frame(draw,x,y,true);previous=window->Scroll.x;
+        h.Frame(draw,x+70,y,true);CHECK(std::abs(window->Scroll.x-(previous-70))<1);
+        h.Frame(draw,x+70,y,false);CHECK(selected==5);
+        selected=-1;previous=window->Scroll.x;h.Frame(draw);CHECK(window->Scroll.x==previous);
+        count=1;h.Frame(draw);h.Frame(draw);CHECK(window->ScrollMax.x==0 && window->Scroll.x==0 && selected==-1);
+        CHECK(!skui::BreadcrumbBar("empty",nullptr,0,&selected));
+    }
+    for(float scale:{1.f,1.25f,2.2f}) for(bool dark:{false,true}) {
+        Interaction h;const char *labels[]={"A directory with an exceptionally long name that needs an ellipsis"};int selected=0;
+        auto draw=[&] {
+            skui::Theme theme;theme.scale=scale;theme.dark=dark;theme.animations=false;skui::ApplyTheme(theme);
+            skui::BreadcrumbBar("long-label",labels,1,&selected);
+        };
+        h.Frame(draw);h.Frame(draw);auto *window=ImGui::FindWindowByName("interactions")->DC.ChildWindows.back();
+        CHECK(std::abs(h.max.y-h.min.y-48*scale)<1 && std::abs(window->Size.y-32*scale)<1);
+        CHECK(std::abs(window->ContentSize.x-160*scale)<1);
+        CHECK(window->ScrollMax.x==0 && window->ScrollMax.y==0 && window->DrawList->VtxBuffer.Size<400);
+        const char *short_names[]={"CurrentDirectory","DocumentsFolder","Navigation","Sources","Settings"};
+        for(const char *name:short_names) {
+            auto short_label=[&] {
+                skui::Theme theme;theme.scale=scale;theme.dark=dark;theme.animations=false;skui::ApplyTheme(theme);
+                skui::BreadcrumbBar("short-label",&name,1,&selected);
+            };
+            h.Frame(short_label);h.Frame(short_label);window=ImGui::FindWindowByName("interactions")->DC.ChildWindows.back();
+            int text_vertices=0;auto color=ImGui::GetColorU32(skui::GetTheme().accent);
+            for(const auto &v:window->DrawList->VtxBuffer) if(v.col==color) ++text_vertices;
+            CHECK(text_vertices==4*static_cast<int>(std::strlen(name)));
+        }
+    }
+    std::puts("PASS breadcrumb overflow: ellipsis, initial centering, 30/60/120Hz reversal, same-frame drag, disabled scroll, no highlight and scaled themes");
+}
 float MarkerX(ImU32 color) {
     float x=FLT_MAX;
     for(auto *list:ImGui::GetDrawData()->CmdLists)
@@ -1381,6 +1468,8 @@ void DynamicAtlasRouteTests() {
 int main() {
     NavigationTests();
     ComponentTests();
+    BreadcrumbTests();
+    BreadcrumbOverflowTests();
     ScrollTests();
     ShellDragTests();
     RouteViewTests();

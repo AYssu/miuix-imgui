@@ -73,6 +73,8 @@ struct Gallery {
     float volume = 42, progress = .35f;
     float range_low = 20, range_high = 80;
     int spinner_choice = 0, dialog_choice = 1, number = 5, breadcrumb = 2, refresh_count = 0;
+    int long_breadcrumb = 6;
+    bool breadcrumb_enabled = true;
     bool multiple[4] = {true, false, false, false};
     bool floating_tools = false, sidebar_expanded = true, sample_sidebar_expanded = true;
     int long_choice = 0;
@@ -243,8 +245,20 @@ struct Gallery {
             else if(component=="TabRow") {
                 const char *labels[]={"全部","收藏","最近"};skui::TabBar("tabs",labels,3,&sample_nav);
             } else if(component=="BreadcrumbBar") {
+                skui::Toggle("允许点击路径",&breadcrumb_enabled,"关闭后仍可左右滑动查看完整路径。");
+                skui::Caption("短路径 · 高亮位置与完整路径独立");
                 const char *labels[]={"设备","文档","项目","资料"};
-                skui::BreadcrumbBar("path",labels,4,&breadcrumb);
+                skui::BreadcrumbBar("path",labels,4,&breadcrumb,breadcrumb_enabled);
+                std::string path;
+                for(int i=0;i<=breadcrumb && i<4;++i) {if(i) path+=" / ";path+=labels[i];}
+                skui::Caption(path.c_str());
+                skui::Space(12);
+                skui::Caption("长路径 · 左右滑动，长名称自动省略");
+                const char *long_path[]={"内部存储","文档","设计项目","组件库","一个需要省略显示的很长很长的文件夹名称","导航示例","当前目录"};
+                skui::BreadcrumbBar("long-path",long_path,7,&long_breadcrumb,breadcrumb_enabled);
+                if(skui::Button("返回根目录",skui::Tone::Neutral)) long_breadcrumb=0;
+                ImGui::SameLine();
+                if(skui::Button("定位当前目录",skui::Tone::Neutral)) long_breadcrumb=6;
             } else if(component=="BasicComponent" || component=="ArrowPreference") {
                 if(skui::BasicComponent("profile","个人资料","查看昵称与个人设置",skui::Icon::Heart,"查看",true))
                     router.Push("/detail","个人资料");

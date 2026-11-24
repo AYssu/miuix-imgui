@@ -19,6 +19,7 @@ void EndInert();
 void Reveal(const char *id, float progress, bool inert, const std::function<void()> &content);
 void AllowScroll();
 bool CanScroll();
+bool BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags);
 enum class OverlayKind { Popup, Dialog, Sheet };
 bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags);
 void EndOverlay();

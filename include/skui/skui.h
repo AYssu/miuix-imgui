@@ -152,7 +152,9 @@ bool ColorPalette(const char *id, ImVec4 *color);
 void CircularProgress(float fraction = -1, float size = 32);
 // Attach to the preceding item. Also appears while holding a touch target.
 void Tooltip(const char *text);
-bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *selected);
+// Full path with an independent highlighted index; negative/out-of-range means
+// no highlight or automatic scrolling. Disabled items still allow scrolling.
+bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *selected, bool enabled = true);
 // Absolute screen positions in pixels, like ShellOptions::initial_position.
 // Keep calling with visible=false to render the exit animation.
 bool FloatingActionButton(const char *id, Icon icon, ImVec2 position, bool visible = true);

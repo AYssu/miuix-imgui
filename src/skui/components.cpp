@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace skui {
 namespace {
@@ -610,19 +611,100 @@ void Tooltip(const char *text) {
     }
     ImGui::PopID();
 }
-bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *selected) {
-    if (!selected || !labels || count <= 0) return false;
-    bool changed = false;
-    BeginScroll(id, ImVec2(0, Dp(58)), true);
-    for (int i = 0; i < count; ++i) {
-        if (i) { ImGui::SameLine(); Text(">"); ImGui::SameLine(); }
-        ImGui::PushID(i);
-        if (Button(labels[i], *selected == i ? Tone::Primary : Tone::Neutral, ImVec2(0, Dp(36)))) {
-            changed = *selected != i; *selected = i;
-        }
-        ImGui::PopID();
+// Geometry and palette follow Miuix BreadcrumbBarDefaults (Apache-2.0),
+// compose-miuix-ui/miuix 07d4859021d7aed1a1f78afaee12c5c8a6917466.
+bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *selected, bool enabled) {
+    if (!selected || !labels || count <= 0 || ImGui::GetCurrentWindow()->SkipItems) return false;
+    auto origin=ImGui::GetCursorScreenPos();float width=ImGui::GetContentRegionAvail().x;
+    float viewport=std::max(1.f,width-Dp(24)),height=Dp(32),separator=Dp(18);
+    ImGui::PushID(id);ImGui::PushFont(nullptr,Dp(14));
+    auto *state=ImGui::GetStateStorage();
+    std::vector<float> widths(count),offsets(count),feedback(count);
+    std::vector<ImRect> bounds(count);
+    float total=0;
+    for(int i=0;i<count;++i) {
+        offsets[i]=total;
+        widths[i]=std::min(Dp(160),ImGui::CalcTextSize(labels[i] ? labels[i] : "",nullptr,false).x+Dp(20));
+        total+=widths[i]+(i+1<count ? separator : 0);
     }
-    EndScroll();
+    auto window_key=ImGui::GetID("window"),selection_key=ImGui::GetID("selected");
+    auto active_key=ImGui::GetID("scroll-active"),time_key=ImGui::GetID("scroll-time");
+    auto from_key=ImGui::GetID("scroll-from"),target_key=ImGui::GetID("scroll-target");
+    auto width_key=ImGui::GetID("width"),total_key=ImGui::GetID("total"),count_key=ImGui::GetID("count");
+    auto *window=ImGui::FindWindowByID(static_cast<ImGuiID>(state->GetInt(window_key)));
+    int previous=state->GetInt(selection_key,INT_MIN);
+    bool highlighted=*selected>=0 && *selected<count;
+    bool locate=highlighted && (previous!=*selected || state->GetInt(count_key)!=count ||
+        state->GetFloat(width_key)!=viewport || state->GetFloat(total_key)!=total);
+    if(locate) {
+        float target=std::clamp(offsets[*selected]+(widths[*selected]+(*selected+1<count ? separator : 0))/2-viewport/2,0.f,std::max(0.f,total-viewport));
+        bool animate=window && previous>=0 && previous<count && previous!=*selected && GetTheme().animations;
+        state->SetFloat(from_key,animate ? window->Scroll.x : target);
+        state->SetFloat(target_key,target);state->SetFloat(time_key,0);state->SetBool(active_key,animate);
+        if(!animate) ImGui::SetNextWindowScroll(ImVec2(target,0));
+    }
+    state->SetInt(selection_key,*selected);state->SetInt(count_key,count);
+    state->SetFloat(width_key,viewport);state->SetFloat(total_key,total);
+    auto &io=ImGui::GetIO();
+    bool user_scroll=window && GImGui->HoveredWindow==window &&
+        (io.MouseWheel!=0 || io.MouseWheelH!=0 ||
+         (ImGui::IsMouseDragging(0,Dp(8)) && std::abs(io.MouseDelta.x)>std::abs(io.MouseDelta.y)));
+    if(!highlighted || user_scroll) state->SetBool(active_key,false);
+    if(state->GetBool(active_key)) {
+        float elapsed=state->GetFloat(time_key)+io.DeltaTime;state->SetFloat(time_key,elapsed);
+        float t=GetTheme().animations ? std::min(1.f,elapsed/(.26f*GetTheme().motion_duration_scale)) : 1.f;
+        ImGui::SetNextWindowScroll(ImVec2(ImLerp(state->GetFloat(from_key),state->GetFloat(target_key),t*t*(3-2*t)),0));
+        if(t==1) state->SetBool(active_key,false);
+    }
+    ImGui::SetCursorScreenPos(Offset(origin,Dp(12),Dp(8)));
+    ImGui::SetNextWindowContentSize(ImVec2(total,height));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
+    bool visible=detail::BeginScroll("segments",ImVec2(viewport,height),true,ImGuiWindowFlags_NoScrollbar);
+    state->SetInt(window_key,static_cast<int>(ImGui::GetCurrentWindow()->ID));
+    bool changed=false;
+    if(visible) {
+        auto start=ImGui::GetCursorScreenPos();auto *draw=ImGui::GetWindowDrawList();
+        bool items_enabled=enabled && !(GImGui->CurrentItemFlags&ImGuiItemFlags_Disabled);
+        ImGui::BeginDisabled(!enabled);
+        for(int i=0;i<count;++i) {
+            ImGui::SetCursorScreenPos(Offset(start,offsets[i],0));ImGui::PushID(i);
+            if(ImGui::InvisibleButton("segment",ImVec2(widths[i],height),ImGuiButtonFlags_EnableNav)) {
+                changed=*selected!=i;*selected=i;
+            }
+            detail::AllowScroll();feedback[i]=detail::InteractionFeedback(.06f,.15f);
+            bounds[i]=ImRect(ImGui::GetItemRectMin(),ImGui::GetItemRectMax());
+            ImGui::PopID();
+        }
+        ImGui::EndDisabled();
+        for(int i=0;i<count;++i) {
+            ImGui::PushID(i);
+            float selection=detail::Animate("highlight",items_enabled && *selected==i ? 1.f : 0.f,.18f);
+            auto normal=TextColor();normal.w=items_enabled ? .1f : .05f;
+            auto accent=GetTheme().accent;accent.w=.2f;
+            auto bg=ImLerp(normal,accent,selection);float dim=1-feedback[i];bg.x*=dim;bg.y*=dim;bg.z*=dim;
+            draw->AddRectFilled(bounds[i].Min,bounds[i].Max,U(bg),height/2);
+            auto fg=TextColor();fg.w=items_enabled ? .55f : .3f;
+            fg=ImLerp(fg,GetTheme().accent,selection);
+            const char *label=labels[i] ? labels[i] : "";auto size=ImGui::CalcTextSize(label,nullptr,false);
+            auto text_min=Offset(bounds[i].Min,std::max(Dp(10),(widths[i]-size.x)/2),(height-size.y)/2);
+            auto text_max=Offset(bounds[i].Max,-Dp(10),0);
+            // Fractional DPI can round the available span just below the
+            // measured text width. Only ellipsize genuinely capped labels.
+            if(size.x>widths[i]-Dp(20)+.01f) {
+                ImGui::PushStyleColor(ImGuiCol_Text,fg);
+                ImGui::RenderTextEllipsis(draw,text_min,text_max,text_max.x,label,label+std::strlen(label),&size);
+                ImGui::PopStyleColor();
+            } else draw->AddText(ImGui::GetFont(),ImGui::GetFontSize(),text_min,U(fg),label,label+std::strlen(label));
+            ImGui::RenderNavCursor(bounds[i],ImGui::GetID("segment"),ImGuiNavRenderCursorFlags_None,height/2);
+            if(i+1<count) {
+                auto color=MutedColor();if(!items_enabled) color.w=.3f;
+                DrawIcon(Icon::Chevron,Offset(bounds[i].Max,separator/2,-height/2),Dp(16),U(color));
+            }
+            ImGui::PopID();
+        }
+    }
+    EndScroll();ImGui::PopStyleVar();ImGui::PopFont();ImGui::PopID();
+    ImGui::SetCursorScreenPos(origin);ImGui::Dummy(ImVec2(width,Dp(48)));
     return changed;
 }
 bool FloatingActionButton(const char *id, Icon icon, ImVec2 position, bool visible) {

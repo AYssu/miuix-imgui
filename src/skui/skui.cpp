@@ -407,7 +407,7 @@ void EndCard() {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 }
-bool BeginScroll(const char *id, ImVec2 size, bool horizontal) {
+bool detail::BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags) {
     // Set the target before BeginChild lays out this frame. SetScrollY after
     // drawing defers the movement until the next frame and visibly trails input.
     auto *storage = ImGui::GetStateStorage();
@@ -442,11 +442,14 @@ bool BeginScroll(const char *id, ImVec2 size, bool horizontal) {
                 : ImVec2(-1, std::clamp(window->Scroll.y - io.MouseDelta.y, 0.f, window->ScrollMax.y)));
         }
     }
-    bool visible = ImGui::BeginChild(id, size, 0, ImGuiWindowFlags_NoBackground |
+    bool visible = ImGui::BeginChild(id, size, 0, flags | ImGuiWindowFlags_NoBackground |
                                     (horizontal ? ImGuiWindowFlags_HorizontalScrollbar : 0));
     ImGui::GetCurrentWindow()->StateStorage.SetInt(axis_key, horizontal ? 2 : 1);
     storage->SetInt(key, static_cast<int>(ImGui::GetCurrentWindow()->ID));
     return visible;
+}
+bool BeginScroll(const char *id, ImVec2 size, bool horizontal) {
+    return detail::BeginScroll(id,size,horizontal,0);
 }
 void EndScroll() { ImGui::EndChild(); }
 bool Button(const char *label, Tone tone, ImVec2 size) {
