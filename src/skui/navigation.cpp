@@ -3,10 +3,16 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <cstring>
+#include <unordered_map>
 
 namespace skui {
 namespace {
-struct DeleteMesh { void operator()(ImDrawList *p) const { IM_DELETE(p); } };
+using Texture = std::shared_ptr<ImTextureData>;
+struct DeleteMesh {
+    std::vector<Texture> textures;
+    void operator()(ImDrawList *p) const { IM_DELETE(p); }
+};
 using Mesh = std::unique_ptr<ImDrawList,DeleteMesh>;
 using Scene = std::vector<Mesh>;
 
@@ -141,10 +147,52 @@ void TransformPage(ImGuiWindow *window, float dx, float alpha, const ImRect &bou
     for(auto *child:window->DC.ChildWindows)
         if(child->Active) TransformPage(child,dx,alpha,bounds);
 }
-void Capture(ImGuiWindow *window, int frame, Scene &scene) {
+// Freeze atlas pixels as well as vertices: loading another page can repack or
+// retire the dynamic atlas while the outgoing page is still being animated.
+// The atlas owns these copies and lets the renderer retire them asynchronously.
+Texture FreezeTexture(ImTextureData *source) {
+    auto *context=GImGui;
+    for(auto *atlas:context->FontAtlases) {
+        if(!atlas->TexList.contains(source)) continue;
+        auto *copy=IM_NEW(ImTextureData)();
+        copy->UniqueID=atlas->TexNextUniqueID++;
+        copy->Create(source->Format,source->Width,source->Height);
+        copy->UseColors=source->UseColors;
+        std::memcpy(copy->Pixels,source->Pixels,source->GetSizeInBytes());
+        atlas->TexList.push_back(copy);
+        return Texture(copy,[context,atlas](ImTextureData *texture) {
+            // RouterView may outlive its context. Atlas destruction already
+            // frees those textures; never access that context after shutdown.
+            if(GImGui==context && context->FontAtlases.contains(atlas) && atlas->TexList.contains(texture))
+                texture->WantDestroyNextFrame=true;
+        });
+    }
+    return {};
+}
+void FreezeMesh(Mesh &mesh, std::unordered_map<ImTextureData*,Texture> &textures) {
+    if(!(ImGui::GetIO().BackendFlags&ImGuiBackendFlags_RendererHasTextures)) return;
+    for(auto &cmd:mesh->CmdBuffer) if(auto *source=cmd.TexRef._TexData) {
+        auto it=textures.find(source);
+        if(it==textures.end()) it=textures.emplace(source,FreezeTexture(source)).first;
+        if(it->second) {
+            cmd.TexRef=it->second->GetTexRef();
+            mesh.get_deleter().textures.push_back(it->second);
+        }
+    }
+}
+void CapturePage(ImGuiWindow *window, int frame, Scene &scene,
+                 std::unordered_map<ImTextureData*,Texture> &textures) {
     if(!window || window->LastFrameActive!=frame || window->Hidden) return;
-    if(!window->DrawList->VtxBuffer.empty()) scene.emplace_back(window->DrawList->CloneOutput());
-    for(auto *child:window->DC.ChildWindows) Capture(child,frame,scene);
+    if(!window->DrawList->VtxBuffer.empty()) {
+        Mesh mesh(window->DrawList->CloneOutput());
+        FreezeMesh(mesh,textures);
+        scene.push_back(std::move(mesh));
+    }
+    for(auto *child:window->DC.ChildWindows) CapturePage(child,frame,scene,textures);
+}
+void Capture(ImGuiWindow *window, int frame, Scene &scene) {
+    std::unordered_map<ImTextureData*,Texture> textures;
+    CapturePage(window,frame,scene,textures);
 }
 // Re-index command-sized batches through PrimReserve, so snapshots work with
 // both 16-bit indices and renderers supporting vertex offsets. Never replay a
@@ -157,7 +205,7 @@ void Paint(const Scene &scene, ImDrawList *out, float dx, float dy, float alpha,
         clip.ClipWith(bounds);
         if(clip.IsInverted()) continue;
         out->PushClipRect(clip.Min,clip.Max,true);
-        out->PushTextureID(cmd.GetTexID());
+        out->PushTexture(cmd.TexRef);
         for(unsigned offset=0;offset<cmd.ElemCount;) {
             unsigned count=std::min(3000u,cmd.ElemCount-offset);
             const auto *indices=mesh->IdxBuffer.Data+cmd.IdxOffset+offset;
@@ -179,7 +227,7 @@ void Paint(const Scene &scene, ImDrawList *out, float dx, float dy, float alpha,
             out->_VtxCurrentIdx+=vertices;
             offset+=count;
         }
-        out->PopTextureID();
+        out->PopTexture();
         out->PopClipRect();
     }
 }
@@ -227,10 +275,13 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
                 if(s.old_dim>0) {
                     shade.reset(IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData()));
                     shade->_ResetForNewFrame();
-                    shade->PushTextureID(ImGui::GetIO().Fonts->TexID);
+                    shade->PushTexture(ImGui::GetIO().Fonts->TexRef);
                     shade->PushClipRect(s.bounds.Min,s.bounds.Max);
                     shade->AddRectFilled(s.bounds.Min,s.bounds.Max,IM_COL32(0,0,0,static_cast<int>(255*s.old_dim)));
-                    shade->PopClipRect();shade->PopTextureID();
+                    shade->PopClipRect();shade->PopTexture();
+                    shade->_SetDrawListSharedData(nullptr);
+                    std::unordered_map<ImTextureData*,Texture> textures;
+                    FreezeMesh(shade,textures);
                 }
                 // Preserve the visible composition when another navigation
                 // interrupts a transition, without re-running either page.
@@ -314,6 +365,7 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
     if(s.moving && s.direction==Router::Navigation::Back) {
         auto cursor=ImGui::GetCursorScreenPos();
         auto item=GImGui->LastItemData;
+        bool was_set_pos=ImGui::GetCurrentWindow()->DC.IsSetPos;
         ImGui::SetCursorScreenPos(bounds.Min);
         ImGui::BeginChild("back-shade",size,0,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoInputs|
                           ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse);
@@ -329,6 +381,7 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
         s.corners.Apply(underlay);
         ImGui::EndChild();
         ImGui::SetCursorScreenPos(cursor);
+        ImGui::GetCurrentWindow()->DC.IsSetPos=was_set_pos;
         GImGui->LastItemData=item;
     }
     ImGui::PopID();

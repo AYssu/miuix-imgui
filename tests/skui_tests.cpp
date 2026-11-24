@@ -138,7 +138,12 @@ void ComponentTests() {
     skui::ApplyTheme(theme);
     CHECK(std::abs(skui::Dp(20) - 40) < .01f);
     CHECK(skui::Background().x < .1f);
+    ImGui::GetStyle().FontSizeBase=18;
+    ImGui::GetStyle().FontScaleMain=1.25f;
+    ImGui::GetStyle().FontScaleDpi=2;
     skui::ApplyTheme(theme);
+    CHECK(ImGui::GetStyle().FontSizeBase==18);
+    CHECK(ImGui::GetStyle().FontScaleMain==1.25f && ImGui::GetStyle().FontScaleDpi==2);
     CHECK(std::abs(ImGui::GetStyle().FramePadding.x - 28) < .01f); // no repeated scaling
     std::puts("PASS components: draw data, toggle release, disabled interaction, cancelled click, dark "
               "theme, repeatable scale");
@@ -1180,6 +1185,74 @@ void TooltipMotionTests() {
     for(auto *list:ImGui::GetDrawData()->CmdLists) CHECK(list!=tooltip->DrawList);
     std::puts("PASS tooltip motion: delayed hover, gradual entry, retained exit at the original position, final draw removal");
 }
+void DynamicAtlasRouteTests() {
+    ImGui::CreateContext();
+    auto &io=ImGui::GetIO();
+    io.IniFilename=nullptr;
+    io.DisplaySize=ImVec2(800,900);
+    io.DeltaTime=1.f/60;
+    io.BackendFlags|=ImGuiBackendFlags_RendererHasTextures;
+    io.Fonts->AddFontDefaultVector();
+    skui::Router router;
+    skui::RouterView view;
+    router.Register("a",[](const skui::Route &) {skui::Text("Outgoing page");});
+    router.Register("b",[](const skui::Route &) {
+        ImGui::PushFont(nullptr,37);
+        skui::Text("New size loads glyphs on demand");
+        ImGui::PopFont();
+    });
+    router.Reset("a");
+    ImTextureID next_id=1;
+    auto frame=[&](bool repack=false) {
+        ImGui::NewFrame();
+        skui::ApplyTheme({});
+        ImGui::SetNextWindowSize(ImVec2(600,800));
+        ImGui::Begin("dynamic-atlas");
+        view.Draw(router,ImVec2(560,600));
+        if(repack) {
+            auto *atlas=io.Fonts;
+            ImFontAtlasTextureRepack(atlas,atlas->TexData->Width*2,atlas->TexData->Height*2);
+        }
+        ImGui::End();
+        ImGui::Render();
+        // Simulate the backend texture protocol, including immediate retirement.
+        for(auto *texture:*ImGui::GetDrawData()->Textures) {
+            if(texture->Status==ImTextureStatus_WantDestroy) {
+                texture->SetTexID(ImTextureID_Invalid);
+                texture->SetStatus(ImTextureStatus_Destroyed);
+            } else if(texture->Status!=ImTextureStatus_OK) {
+                if(texture->GetTexID()==ImTextureID_Invalid) texture->SetTexID(next_id++);
+                texture->SetStatus(ImTextureStatus_OK);
+            }
+        }
+        for(auto *list:ImGui::GetDrawData()->CmdLists) for(auto &cmd:list->CmdBuffer) {
+            if(!cmd.ElemCount || cmd.UserCallback) continue;
+            CHECK(cmd.GetTexID()!=ImTextureID_Invalid);
+            if(cmd.TexRef._TexData) CHECK(cmd.TexRef._TexData->Status==ImTextureStatus_OK);
+        }
+    };
+    frame();frame();
+    CHECK(router.Push("b"));frame();CHECK(view.IsTransitioning());
+    ImTextureData *frozen=nullptr;
+    for(auto *texture:io.Fonts->TexList)
+        if(texture!=io.Fonts->TexData && !texture->WantDestroyNextFrame) frozen=texture;
+    CHECK(frozen);
+    std::vector<unsigned char> pixels(frozen->Pixels,frozen->Pixels+frozen->GetSizeInBytes());
+    frame(true);frame();frame();
+    CHECK(view.IsTransitioning() && io.Fonts->TexList.contains(frozen));
+    CHECK(!frozen->WantDestroyNextFrame);
+    CHECK(std::memcmp(frozen->Pixels,pixels.data(),pixels.size())==0);
+    // Interrupt an active transition, exercising the retained dimming layer.
+    CHECK(router.Back());frame();
+    CHECK(router.Push("b"));frame();frame(true);frame();
+    for(int i=0;i<40;++i) frame();
+    CHECK(!view.IsTransitioning());
+    CHECK(io.Fonts->TexList.Size==1);
+    // A RouterView can still contain a snapshot when its host shuts down.
+    CHECK(router.Back());frame();CHECK(view.IsTransitioning());
+    ImGui::DestroyContext();
+    std::puts("PASS dynamic atlas: new font sizes, repack during routes, interruption, texture retirement, context shutdown");
+}
 int main() {
     NavigationTests();
     ComponentTests();
@@ -1188,6 +1261,7 @@ int main() {
     RouteViewTests();
     RouteMotionReferenceTests();
     RouteClipIndexTests();
+    DynamicAtlasRouteTests();
     SelectionTests();
     OverlayMotionTests();
     MenuExitFrameTests();

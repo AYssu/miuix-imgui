@@ -9,9 +9,10 @@
 
 | 组件 | 位置/版本 | 许可与说明 |
 | --- | --- | --- |
-| Dear ImGui | include/ImGui 与 src/ImGui；文件标记 1.92.0 WIP，历史快照的精确提交未记录 | [MIT](LICENSES/Dear-ImGui-MIT.txt)，Omar Cornut；包含平台/渲染后端及 FreeType 适配。my_imgui_impl_android 也包含其 Android 后端派生实现 |
+| Dear ImGui | include/ImGui 与 src/ImGui；上游 v1.93.0（c1aaac65e896a45f81f47a4d68f9959e0f86c859） | [MIT](LICENSES/Dear-ImGui-MIT.txt)，Omar Cornut；包含平台/渲染后端及 FreeType 适配。my_imgui_impl_android 也包含其 Android 后端派生实现 |
 | stb | include/ImGui/imstb_*，include/My_Utils/stb_image，src/My_Utils/stb_image | 采用其双许可中的 [MIT](LICENSES/stb-MIT.txt)，Sean Barrett；原文件末尾保留许可 |
 | ProggyClean | src/ImGui/imgui_draw.cpp 内嵌默认字体 | [MIT](LICENSES/ProggyClean-MIT.txt)，Tristan Grimmer |
+| ProggyForever | src/ImGui/imgui_draw.cpp 内嵌可缩放默认字体 | [MIT](LICENSES/ProggyForever-MIT.txt)，Disco Hello、Tristan Grimmer |
 | gl3w / Khronos GL 声明 | include/ImGui/backends/imgui_impl_opengl3_loader.h | gl3w 为 Unlicense，Khronos 部分为 MIT；许可原文保留在该文件头部 |
 | Google Vulkan wrapper | include/Android_Graphics/vulkan_wrapper.h、src/Android_Graphics/vulkan_wrapper.cpp | [Apache-2.0](LICENSES/Apache-2.0.txt)，Copyright 2016 Google Inc. |
 | FreeType | 构建时获取 VER-2-13-3，不提交旧预编译归档 | 选择 [FreeType License](LICENSES/FreeType-FTL.txt)，另见 [许可汇总](LICENSES/FreeType-LICENSE.txt)、[BDF](LICENSES/FreeType-BDF.txt)、[PCF](LICENSES/FreeType-PCF.txt) 说明 |
@@ -21,11 +22,12 @@ This software uses the FreeType library. Portions of this software are copyright
 
 FreeType 上游源码同时保留各子模块的原始许可；本项目关闭可选外部依赖，不修改其源码。
 Dear ImGui 的日本字形范围数据在 `imgui_draw.cpp` 中另外保留了政府数据来源和 CC BY 4.0 说明。
-修改过的 ImGui 快照/Android 派生后端应视为本地版本，不能声称与上游原版完全一致。
+附带的 ImGui 核心、标准后端与 FreeType 适配文件保持 v1.93.0 上游原文；
+`Android_my_imgui` 等项目平台适配是独立的本地派生代码。
 
 上游参考：
 
-- Dear ImGui：<https://github.com/ocornut/imgui>（许可补充原文来自 v1.91.9b，与本地版权年份一致，不作为本地代码提交号）
+- Dear ImGui：<https://github.com/ocornut/imgui>（本次源码和许可均来自 v1.93.0，归档校验见 [依赖版本](docs/dependencies.md)）
 - stb：<https://github.com/nothings/stb>
 - FreeType：<https://github.com/freetype/freetype/tree/VER-2-13-3>
 - FreeType 归档：<https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-13-3>

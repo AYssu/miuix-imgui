@@ -24,6 +24,8 @@ int main() {
     io.DisplaySize = ImVec2(600, 800);
     io.DeltaTime = 1.f / 60;
     io.Fonts->AddFontDefault();
+    // No renderer here: build a static atlas for this headless check only.
+    // Real hosts use the texture protocol supplied by their renderer backend.
     unsigned char *pixels;
     int w, h;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);

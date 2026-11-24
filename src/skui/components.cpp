@@ -12,6 +12,13 @@ namespace skui {
 namespace {
 ImU32 U(ImVec4 color) { return ImGui::GetColorU32(color); }
 ImVec2 Offset(ImVec2 p, float x, float y) { return ImVec2(p.x + x, p.y + y); }
+void ColorPreview(ImDrawList *draw, ImVec2 min, ImVec2 max, ImVec4 color) {
+    if(color.w>=1.f)
+        draw->AddRectFilled(min,max,U(color),Dp(12));
+    else
+        ImGui::RenderColorRectWithAlphaCheckerboard(draw,min,max,
+            ImGui::ColorConvertFloat4ToU32(color),ImGui::GetStyle().Alpha,Dp(8),ImVec2(0,0),Dp(12));
+}
 const char *SelectedLabel(int selected, const ChoiceItem *items, int count) {
     return items && selected >= 0 && selected < count ? items[selected].label : "请选择";
 }
@@ -453,8 +460,7 @@ bool ColorPicker(const char *label, ImVec4 *color, bool alpha) {
     state->SetFloat(key, hue);
     state->SetFloat(ImGui::GetID("saturation"),saturation);
     if (changed) ImGui::ColorConvertHSVtoRGB(hue, saturation, brightness, color->x, color->y, color->z);
-    ImGui::RenderColorRectWithAlphaCheckerboard(ImGui::GetWindowDrawList(),preview,
-        Offset(preview,preview_width,Dp(32)),U(*color),Dp(8),ImVec2(0,0),Dp(12));
+    ColorPreview(ImGui::GetWindowDrawList(),preview,Offset(preview,preview_width,Dp(32)),*color);
     ImGui::PopID();
     return changed;
 }
@@ -520,8 +526,7 @@ bool ColorPalette(const char *id, ImVec4 *color) {
     draw->AddCircle(indicator,cell*.32f,U(ImVec4(0,0,0,.6f)),24,Dp(3));
     draw->AddCircle(indicator,cell*.32f,U(ImVec4(1,1,1,1)),24,Dp(1.5f));
     changed=Slider("透明度",&color->w,0,1,"%.2f",ImGuiSliderFlags_NoRoundToFormat) || changed;
-    ImGui::RenderColorRectWithAlphaCheckerboard(draw,preview,Offset(preview,width,preview_height),
-        U(*color),Dp(8),ImVec2(0,0),Dp(12));
+    ColorPreview(draw,preview,Offset(preview,width,preview_height),*color);
     ImGui::PopID(); return changed;
 }
 void CircularProgress(float fraction, float size) {
@@ -536,7 +541,7 @@ void CircularProgress(float fraction, float size) {
     float end = start + 2 * IM_PI * (fraction < 0 ? .28f : std::clamp(fraction, 0.f, 1.f));
     if (end > start) {
         draw->PathArcTo(center, radius, start, end, 40);
-        draw->PathStroke(U(GetTheme().accent), 0, Dp(3));
+        draw->PathStroke(U(GetTheme().accent), Dp(3));
     }
 }
 void Tooltip(const char *text) {

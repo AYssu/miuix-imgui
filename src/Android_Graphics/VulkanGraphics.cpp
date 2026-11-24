@@ -61,7 +61,7 @@ bool VulkanGraphics::Create() {
 
     //为imgui加载vulkan函数
     void *libvulkan = dlopen("libvulkan.so", RTLD_NOW);
-    ImGui_ImplVulkan_LoadFunctions(0, [](const char *function_name, void *handle) -> PFN_vkVoidFunction {
+    ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_1, [](const char *function_name, void *handle) -> PFN_vkVoidFunction {
         return reinterpret_cast<PFN_vkVoidFunction>(dlsym(handle, function_name));
     }, libvulkan);
 
@@ -243,7 +243,7 @@ bool VulkanGraphics::Create() {
         IM_ASSERT(m_MinImageCount >= 2);
         ImGui_ImplVulkanH_CreateOrResizeWindow(m_Instance, m_PhysicalDevice, m_Device, wd.get(), m_QueueFamily,
                                                m_Allocator,
-                                               (int) m_Width, (int) m_Height, m_MinImageCount);
+                                               (int) m_Width, (int) m_Height, m_MinImageCount, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     }
 
     return true;
@@ -251,6 +251,7 @@ bool VulkanGraphics::Create() {
 
 void VulkanGraphics::Setup() {
     ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.ApiVersion = VK_API_VERSION_1_1;
     init_info.Instance = m_Instance;
     init_info.PhysicalDevice = m_PhysicalDevice;
     init_info.Device = m_Device;
@@ -258,11 +259,11 @@ void VulkanGraphics::Setup() {
     init_info.Queue = m_Queue;
     init_info.PipelineCache = m_PipelineCache;
     init_info.DescriptorPool = m_DescriptorPool;
-    init_info.RenderPass = wd->RenderPass;
-    init_info.Subpass = 0;
+    init_info.PipelineInfoMain.RenderPass = wd->RenderPass;
+    init_info.PipelineInfoMain.Subpass = 0;
     init_info.MinImageCount = m_MinImageCount;
     init_info.ImageCount = wd->ImageCount;
-    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     init_info.Allocator = m_Allocator;
     init_info.CheckVkResultFn = check_vk_result;
     ImGui_ImplVulkan_Init(&init_info);
@@ -284,7 +285,7 @@ void VulkanGraphics::PrepareFrame(bool resize) {
                 m_LastHeight = height;
                 ImGui_ImplVulkan_SetMinImageCount(m_MinImageCount);
                 ImGui_ImplVulkanH_CreateOrResizeWindow(m_Instance, m_PhysicalDevice, m_Device, wd.get(),
-                                                       m_QueueFamily, m_Allocator, width, height, m_MinImageCount);
+                                                       m_QueueFamily, m_Allocator, width, height, m_MinImageCount, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
                 wd->FrameIndex = 0;
                 m_SwapChainRebuild = false;
             }
@@ -487,7 +488,7 @@ BaseTexData *VulkanGraphics::LoadTexture(BaseTexData *tex, void *pixel_data) {
     }
 
     // Create Descriptor Set using ImGUI's implementation
-    tex_data->DS = (void *) ImGui_ImplVulkan_AddTexture(tex_data->Sampler, tex_data->ImageView,
+    tex_data->DS = (void *) ImGui_ImplVulkan_AddTexture(tex_data->ImageView,
                                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Create Upload Buffer

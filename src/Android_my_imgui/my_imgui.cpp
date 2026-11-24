@@ -1021,68 +1021,20 @@ namespace ImGui {
             }
         }
 
-        const static char *TextAdded = "\u2122""骼瞄狙盔弩嗯帧瞬掷屏屉霰柯匣";
-        ImGuiIO &io = ImGui::GetIO();
-        
-        static ImVector<ImWchar> ranges;
-        if (ranges.empty()) {
-            ImFontGlyphRangesBuilder builder;
-            constexpr ImWchar Ranges[]{
-                    0x0020, 0x00FF, // Basic Latin
-                    0x0100, 0x024F, // Latin Extended-A + Latin Extended-B
-                    0x0300, 0x03FF, // Combining Diacritical Marks + Greek/Coptic
-                    0x0400, 0x052F, // Cyrillic + Cyrillic Supplement
-                    0x0600, 0x06FF, // Arabic
-                    0x0E00, 0x0E7F, // Thai
-                    0x2DE0, 0x2DFF, // Cyrillic Extended-A
-                    0x2000, 0x206F, // General Punctuation
-                    0x3000, 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
-                    0x31F0, 0x31FF, // Katakana Phonetic Extensions
-                    0xFF00, 0xFFEF, // Half-width characters
-                    //0x4E00, 0x9FAF, // CJK Ideograms
-                    0xA640, 0xA69F, // Cyrillic Extended-B
-                    0x3131, 0x3163, // Korean alphabets
-                    //  0xAC00, 0xD7A3, // Korean characters
-                    0
-            };
-            builder.AddRanges(Ranges);
-            //builder.AddRanges(io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-            builder.AddRanges(GetGlyphRangesChineseSimplifiedOfficial());
-            builder.AddText(TextAdded);
-            builder.BuildRanges(&ranges);
-        }
-        
         ImFontConfig config;
-        config.FontDataOwnedByAtlas = false;
         config.SizePixels = SizePixels;
-        //config.GlyphRanges = ranges.Data;
-        config.OversampleH = 1;
-        SystemFont = My_AddFontFromFileTTF(path, 0, &config, io.Fonts->GetGlyphRangesChineseFull());
+        SystemFont = My_AddFontFromFileTTF(path, SizePixels, &config);
         return SystemFont != NULL;
     }
 
 
 
     ImFont* My_AddFontFromFileTTF(const char* filename, float size_pixels, const ImFontConfig* font_cfg_template, const ImWchar* glyph_ranges) {
-        ImGuiIO &io = ImGui::GetIO();
-        IM_ASSERT(!Locked && "Cannot modify a locked ImFontAtlas between NewFrame() and EndFrame/Render()!");
-        size_t data_size = 0;
-        void* data = ImFileLoadToMemory(filename, "rb", &data_size, 0);
-        if (!data) {
-            IM_ASSERT_USER_ERROR(0, "Could not load font file!");
-            return NULL;
-        }
-        ImFontConfig font_cfg = font_cfg_template ? *font_cfg_template : ImFontConfig();
-        if (font_cfg.Name[0] == '\0') {
-            // Store a short copy of filename into into the font name for convenience
-            const char* p;
-            for (p = filename + strlen(filename); p > filename && p[-1] != '/' && p[-1] != '\\'; p--) {}
-            ImFormatString(font_cfg.Name, IM_ARRAYSIZE(font_cfg.Name), "%s, %.0fpx", p, size_pixels);
-        }
-        ImFont *local_Font = io.Fonts->AddFontFromMemoryTTF(data, (int)data_size, size_pixels, &font_cfg, glyph_ranges);
-        free(data);
-        data = NULL;
-        return local_Font;
+        // The dynamic font loader needs the source data for later sizes/glyphs.
+        // Let the atlas own it until ClearFonts()/context destruction.
+        ImFontConfig config = font_cfg_template ? *font_cfg_template : ImFontConfig();
+        config.FontDataOwnedByAtlas = true;
+        return ImGui::GetIO().Fonts->AddFontFromFileTTF(filename, size_pixels, &config, glyph_ranges);
     }
 
 }

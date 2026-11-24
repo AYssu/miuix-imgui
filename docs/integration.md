@@ -16,7 +16,10 @@ target_link_libraries(your-app PRIVATE skui::ui skui::navigation)
 
 默认编译随仓库附带的 ImGui。外部 target 必须公开 `imgui.h`、`imgui_internal.h`、
 配置宏及链接依赖，且与宿主使用同一份上下文和实现；不要再编译一份 ImGui。
-当前基于附带的 `1.92.0 WIP` 内部 API，其他版本不保证直接兼容。
+当前基于附带的 `v1.93.0` 内部 API，其他版本不保证直接兼容。
+动态字体及后端升级要求见 [依赖版本](dependencies.md)。
+`ApplyTheme()` 保留宿主的 `FontSizeBase`、`FontScaleMain` 和 `FontScaleDpi`；
+需要临时字号时使用 `ImGui::PushFont(nullptr, size)` / `PopFont()`。
 仅使用无动画路由时可以只链接 `skui::navigation`，该头文件目标不依赖 ImGui 或 Android。
 
 ## 每帧调用与状态

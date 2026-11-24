@@ -479,7 +479,7 @@ struct Gallery {
         scale = std::clamp(std::min(display.x, display.y) / 490.f, 1.f, 2.6f) * (wide ? .57f : 1.f);
         theme.scale = scale;
         skui::ApplyTheme(theme);
-        ImGui::GetIO().FontGlobalScale = skui::Dp(16) / 35.2f;
+        ImGui::PushFont(nullptr, skui::Dp(16));
         const skui::NavItem items[] = {{"组件", skui::Icon::Components},
                                        {"布局", skui::Icon::Layout},
                                        {"导航", skui::Icon::Navigation},
@@ -550,6 +550,7 @@ struct Gallery {
         }
         snackbar.Draw(ImVec2(window_pos.x + skui::Dp(24), window_pos.y + window_size.y - skui::Dp(132)),
                       window_size.x - skui::Dp(48));
+        ImGui::PopFont();
     }
 };
 Gallery app;

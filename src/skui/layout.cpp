@@ -52,7 +52,7 @@ void PaintChoice(const PreferenceRow &row,bool selected,bool radio) {
         if(a>0) draw->AddCircleFilled(center,Dp(6)*a,U(GetTheme().accent),32);
     } else {
         auto color=ImLerp(MutedColor(),GetTheme().accent,a);
-        draw->AddRect(At(center,-Dp(11),-Dp(11)),At(center,Dp(11),Dp(11)),U(color),Dp(7),0,Dp(2));
+        draw->AddRect(At(center,-Dp(11),-Dp(11)),At(center,Dp(11),Dp(11)),U(color),Dp(7),Dp(2));
         if(a>0) {
             color.w*=a;
             draw->AddRectFilled(At(center,-Dp(11),-Dp(11)),At(center,Dp(11),Dp(11)),U(color),Dp(7));

@@ -200,6 +200,10 @@ void ApplyTheme(const Theme &value) {
     theme = value;
     theme.scale = std::max(.5f, std::min(4.f, theme.scale));
     ImGuiStyle style;
+    const auto &host_style=ImGui::GetStyle();
+    style.FontSizeBase=host_style.FontSizeBase;
+    style.FontScaleMain=host_style.FontScaleMain;
+    style.FontScaleDpi=host_style.FontScaleDpi;
     // ImGui floors auto-fit window sizes. Fractional padding could leave a
     // sub-pixel scroll extent (e.g. 0.6px at 2.2x) on a three-item popup.
     style.WindowPadding = ImVec2(std::round(Dp(20)), std::round(Dp(14)));
@@ -282,15 +286,15 @@ void DrawIcon(Icon icon, ImVec2 c, float size, ImU32 color) {
         for (int y = -1; y <= 1; y += 2)
             for (int x = -1; x <= 1; x += 2)
                 d->AddRect(Add(c, x * r * .47f - r * .28f, y * r * .47f - r * .28f),
-                           Add(c, x * r * .47f + r * .28f, y * r * .47f + r * .28f), color, Dp(2), 0, t);
+                           Add(c, x * r * .47f + r * .28f, y * r * .47f + r * .28f), color, Dp(2), t);
         break;
     case Icon::Layout:
-        d->AddRect(Add(c, -r * .7f, -r * .65f), Add(c, r * .7f, r * .65f), color, Dp(3), 0, t);
+        d->AddRect(Add(c, -r * .7f, -r * .65f), Add(c, r * .7f, r * .65f), color, Dp(3), t);
         line(-.2f, -.65f, -.2f, .65f);
         line(-.2f, -.1f, .7f, -.1f);
         break;
     case Icon::Sidebar:
-        d->AddRect(Add(c, -r * .8f, -r * .65f), Add(c, r * .8f, r * .65f), color, Dp(3), 0, t);
+        d->AddRect(Add(c, -r * .8f, -r * .65f), Add(c, r * .8f, r * .65f), color, Dp(3), t);
         line(-.2f, -.65f, -.2f, .65f);
         break;
     case Icon::Navigation:

@@ -21,7 +21,8 @@
 Miuix 目录的 55 个名称中，目前有 46 项在同一 Surface 内提供对应交互；
 9 项 Window 系列的独立 Android 窗口后端尚未实现。
 具体接口、差异与过渡行为见 [组件对照](docs/miuix-components.md)。
-使用 ImGui 内部 API，默认附带的版本为 `1.92.0 WIP`；接入其他版本须自行验证兼容性。
+使用 ImGui 内部 API，默认附带的版本为 `v1.93.0`；接入其他版本须自行验证兼容性。
+升级来源与适配细节见 [依赖版本](docs/dependencies.md)。
 原生悬浮后端依赖 Android 私有接口，当前设备验证以 Android 13 / arm64 为主，
 不能仅凭编译成功推定其他系统版本可用。
 
