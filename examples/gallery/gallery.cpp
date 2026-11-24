@@ -196,6 +196,8 @@ struct Gallery {
                 skui::EndScroll();
             } else if(component=="Glass") {
                 skui::Slider("模糊",&glass_style.blur,0,24);skui::Slider("折射",&glass_style.refraction,0,12);
+                skui::Slider("色调强度",&glass_style.tint.w,0,.6f,"%.2f");
+                skui::Caption("模糊与折射为 0 时背景清晰；色调强度控制白色蒙层。");
                 auto p=ImGui::GetCursorScreenPos();float w=ImGui::GetContentRegionAvail().x,h=skui::Dp(220);
                 auto *d=ImGui::GetWindowDrawList();
                 d->AddRectFilled(p,ImVec2(p.x+w,p.y+h),ImGui::GetColorU32(ImVec4(.15f,.2f,.38f,1)),skui::Dp(24));

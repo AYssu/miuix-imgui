@@ -204,7 +204,8 @@ struct GlassStyle {
     ImVec4 tint{1,1,1,.22f};
 };
 // Capture the already drawn background before painting glass, excluding the
-// glass itself. Own on the rendering thread; capture is downsampled and bounded.
+// glass itself. Capture and Draw must run in the same frame/rendering thread.
+// Sampling adapts to blur, up to native density (bounded to 1M pixels / 2048px).
 class GlassBackdrop {
   public:
     GlassBackdrop();

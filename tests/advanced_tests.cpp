@@ -153,6 +153,65 @@ void Glass() {
     CHECK(atlas->TexList.Size==baseline);
     std::puts("PASS Glass: sampled background, blurred boundary, same-frame update, bounded resolution, resize and resource retirement");
 }
+void ClearGlass() {
+    Frame f;skui::GlassBackdrop glass;skui::GlassStyle style;
+    style.blur=0;style.refraction=0;style.tint=ImVec4(0,0,0,0);style.rounding=0;
+    ImVec2 p{},end{};bool mutate=false;
+    auto draw=[&] {
+        auto *d=ImGui::GetWindowDrawList();p=ImGui::GetCursorScreenPos();end=ImVec2(p.x+460,p.y+120);
+        for(int x=0;x<460;++x)
+            d->AddRectFilled(ImVec2(p.x+x,p.y),ImVec2(p.x+x+1,end.y),x%2 ? IM_COL32_BLACK : IM_COL32_WHITE);
+        CHECK(glass.Capture(d,p,end));
+        if(mutate) d->AddRectFilled(p,end,IM_COL32(0,255,0,255));
+        // A smaller panel must sample the matching background coordinates at
+        // native resolution, rather than magnifying a 192px capture.
+        CHECK(glass.Draw(ImVec2(p.x+20,p.y),ImVec2(end.x-20,end.y),style));
+        ImGui::Dummy(ImVec2(460,120));
+    };
+    f.Draw(draw);
+    auto *material=ImGui::GetIO().Fonts->TexList.back();
+    CHECK(material->Width==420 && material->Height==120);
+    for(int x=10;x<410;++x) {
+        auto *pixel=static_cast<unsigned char *>(material->GetPixelsAt(x,60));
+        for(int c=0;c<3;++c) CHECK(pixel[c]==(x%2 ? 0 : 255));
+    }
+    style.saturation=1;f.Draw(draw);
+    // Neutral clear glass leaves the original GPU background visible, with no
+    // sampled image to soften fine details or double-blend translucent pixels.
+    bool sampled=false;
+    for(auto *list:ImGui::GetDrawData()->CmdLists) for(const auto &cmd:list->CmdBuffer)
+        if(cmd.ElemCount && cmd.TexRef._TexData==material) sampled=true;
+    CHECK(!sampled);
+    // A capture remains frozen even if the source list changes before Draw.
+    // That case must not take the direct-background shortcut.
+    mutate=true;f.Draw(draw);material=ImGui::GetIO().Fonts->TexList.back();
+    auto *pixel=static_cast<unsigned char *>(material->GetPixelsAt(20,60));
+    CHECK(pixel[0]==255 && pixel[1]==255 && pixel[2]==255);
+    mutate=false;ImGui::GetIO().DisplayFramebufferScale=ImVec2(2,2);style.saturation=1.2f;
+    f.Draw(draw);material=ImGui::GetIO().Fonts->TexList.back();
+    CHECK(material->Width==840 && material->Height==240);
+    for(int x=20;x<820;++x) {
+        auto *pixel=static_cast<unsigned char *>(material->GetPixelsAt(x,120));
+        for(int c=0;c<3;++c) CHECK(pixel[c]==((x/2)%2 ? 0 : 255));
+    }
+    f.Draw([&] {
+        ImDrawList source(ImGui::GetDrawListSharedData());source._ResetForNewFrame();
+        source.PushClipRectFullScreen();source.PushTexture(ImGui::GetIO().Fonts->TexRef);
+        source.AddRectFilled(ImVec2(20,20),ImVec2(180,180),IM_COL32(255,255,255,128));
+        CHECK(glass.Capture(&source,ImVec2(20,20),ImVec2(180,180)));
+        CHECK(glass.Draw(ImVec2(20,20),ImVec2(180,180),style));
+    });
+    material=ImGui::GetIO().Fonts->TexList.back();
+    for(int y=2;y<material->Height-2;++y) for(int x=2;x<material->Width-2;++x)
+        CHECK(static_cast<unsigned char *>(material->GetPixelsAt(x,y))[3]==128);
+    f.Draw([&] {
+        auto *d=ImGui::GetWindowDrawList();p=ImGui::GetCursorScreenPos();end=ImVec2(p.x+4096,p.y+4096);
+        CHECK(glass.Capture(d,p,end));CHECK(glass.Draw(p,end,style));
+    });
+    material=ImGui::GetIO().Fonts->TexList.back();
+    CHECK(material->Width<=2048 && material->Height<=2048 && material->Width*material->Height<=1048576);
+    std::puts("PASS clear Glass: 1px detail, cropped coordinates, neutral passthrough, frozen capture and framebuffer scale");
+}
 void Haptics() {
     Frame f;int events=0;skui::SetHapticHandler([](skui::Haptic,void *p){++*static_cast<int *>(p);},&events);
     skui::ApplyTheme(f.theme);skui::PerformHaptic(skui::Haptic::Selection);CHECK(events==1);
@@ -188,4 +247,4 @@ void PerceptualPicker() {
     std::puts("PASS perceptual picker: same-frame preview, alpha preservation, gamut/hue slider stability and external synchronization");
 }
 }
-int main() {Colors();SpringsAndHeader();Windows();Glass();Haptics();PerceptualPicker();}
+int main() {Colors();SpringsAndHeader();Windows();Glass();ClearGlass();Haptics();PerceptualPicker();}
