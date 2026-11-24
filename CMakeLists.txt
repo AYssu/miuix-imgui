@@ -19,7 +19,8 @@ else()
     set(SKUI_IMGUI skui-imgui)
 endif()
 
-add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp)
+add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp
+    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp)
 add_library(skui::ui ALIAS skui-ui)
 target_include_directories(skui-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(skui-ui PUBLIC ${SKUI_IMGUI})
@@ -86,6 +87,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         src/Android_my_imgui/AndroidImgui.cpp src/Android_my_imgui/my_imgui.cpp
         src/Android_my_imgui/my_imgui_impl_android.cpp
         src/Android_my_imgui/AndroidIme.cpp src/Android_my_imgui/AndroidImeApk.cpp
+        src/Android_my_imgui/AndroidHaptics.cpp
         "${skui_ime_generated}/skui_ime_dex.h"
         src/ImGui/backends/imgui_impl_opengl3.cpp src/ImGui/backends/imgui_impl_vulkan.cpp
         src/My_Utils/stb_image/stb_image.cpp)
@@ -112,4 +114,7 @@ if(SKUI_BUILD_TESTS)
     add_executable(skui-tests tests/skui_tests.cpp)
     target_link_libraries(skui-tests PRIVATE skui::ui skui::navigation)
     add_test(NAME skui-tests COMMAND skui-tests)
+    add_executable(skui-advanced-tests tests/advanced_tests.cpp)
+    target_link_libraries(skui-advanced-tests PRIVATE skui::ui)
+    add_test(NAME skui-advanced-tests COMMAND skui-advanced-tests)
 endif()

@@ -2,6 +2,7 @@
 #include <android/native_window.h>
 #include "OpenGLGraphics.h"
 #include "imgui_impl_opengl3.h"
+#include "native_surface/ANativeWindowCreator.h"
 
 
 #if !defined(EGL_OPENGL_ES3_BIT)
@@ -21,6 +22,7 @@ bool OpenGLGraphics::Create() {
     eglChooseConfig(m_EglDisplay, egl_attributes, nullptr, 0, &num_configs);
     EGLConfig egl_config;
     eglChooseConfig(m_EglDisplay, egl_attributes, &egl_config, 1, &num_configs);
+    m_EglConfig=egl_config;
     EGLint egl_format;
     eglGetConfigAttrib(m_EglDisplay, egl_config, EGL_NATIVE_VISUAL_ID, &egl_format);
     ANativeWindow_setBuffersGeometry(m_Window, 0, 0, egl_format);
@@ -50,6 +52,38 @@ void OpenGLGraphics::Render(ImDrawData *drawData) {
 
 void OpenGLGraphics::PrepareShutdown() {
     ImGui_ImplOpenGL3_Shutdown();
+}
+bool OpenGLGraphics::RenderPlatformWindow(unsigned int id,ImDrawData *data) {
+    if(!data) {
+        for(auto it=m_Layers.begin();it!=m_Layers.end();) {
+            if(it->second.frame==ImGui::GetFrameCount()) {++it;continue;}
+            eglDestroySurface(m_EglDisplay,it->second.surface);
+            android::ANativeWindowCreator::Destroy(it->second.window);it=m_Layers.erase(it);
+        }
+        return true;
+    }
+    auto &layer=m_Layers[id];
+    if(!layer.window) {
+        char name[48];snprintf(name,sizeof(name),"skui-window-%08x",id);
+        layer.window=android::ANativeWindowCreator::Create(name,ANativeWindow_getWidth(m_Window),ANativeWindow_getHeight(m_Window),false);
+        if(!layer.window) {m_Layers.erase(id);return false;}
+        EGLint format;eglGetConfigAttrib(m_EglDisplay,m_EglConfig,EGL_NATIVE_VISUAL_ID,&format);
+        ANativeWindow_setBuffersGeometry(layer.window,0,0,format);
+        layer.surface=eglCreateWindowSurface(m_EglDisplay,m_EglConfig,layer.window,nullptr);
+        if(layer.surface==EGL_NO_SURFACE) {android::ANativeWindowCreator::Destroy(layer.window);m_Layers.erase(id);return false;}
+    }
+    if(!eglMakeCurrent(m_EglDisplay,layer.surface,layer.surface,m_EglContext)) return false;
+    glClearColor(0,0,0,0);glClear(GL_COLOR_BUFFER_BIT);ImGui_ImplOpenGL3_RenderDrawData(data);
+    bool okay=eglSwapBuffers(m_EglDisplay,layer.surface);
+    eglMakeCurrent(m_EglDisplay,m_EglSurface,m_EglSurface,m_EglContext);
+    if(okay) layer.frame=ImGui::GetFrameCount();return okay;
+}
+void OpenGLGraphics::ClosePlatformWindows() {
+    for(auto &entry:m_Layers) {
+        eglDestroySurface(m_EglDisplay,entry.second.surface);
+        android::ANativeWindowCreator::Destroy(entry.second.window);
+    }
+    m_Layers.clear();
 }
 
 void OpenGLGraphics::Cleanup() {

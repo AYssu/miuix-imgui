@@ -13,6 +13,7 @@ void RequestStop(int) { stop_requested = 1; }
 
 #include "AndroidImgui.h"    //创建绘制套
 #include "AndroidIme.h"
+#include "AndroidHaptics.h"
 #include "GraphicsManager.h" //获取 当前渲染模式
 #include "draw.h"            //绘制套
 
@@ -88,11 +89,13 @@ int main(int argc, char *argv[]) {
 
     ::init_My_drawdata(); // 初始化绘制数据
     AndroidIme::Init();
+    AndroidHaptics::Init();
     static bool flag = true;
     while (flag && !stop_requested) {
         drawBegin();
         Touch::Poll();
         AndroidIme::Poll();
+        AndroidHaptics::Poll();
         graphics->NewFrame();
 
         Layout_tick_UI(&flag);
@@ -102,6 +105,7 @@ int main(int argc, char *argv[]) {
     }
 
     AndroidIme::Shutdown();
+    AndroidHaptics::Shutdown();
     Touch::Close();
     graphics->Shutdown();
     android::ANativeWindowCreator::Destroy(::window);

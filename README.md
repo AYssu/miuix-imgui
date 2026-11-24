@@ -14,12 +14,14 @@
 | --- | --- |
 | 基础与表单 | Button、Switch、Checkbox、Radio、Slider、TextField、SearchField 与带摘要的 Preference |
 | 浮动选择 | Dropdown、Spinner、MultiSelect、列表/图标/级联菜单、Dialog、BottomSheet |
-| 布局与导航 | Surface、Card、TopAppBar、可折叠 NavigationRail、NavigationBar、TabBar、BreadcrumbBar、RouterView |
+| 布局与导航 | Surface、Card、TopAppBar、CollapsingTopAppBar、可折叠 NavigationRail、NavigationBar、TabBar、BreadcrumbBar、RouterView |
 | 反馈与连续输入 | Snackbar、Tooltip、Badge、Progress、下拉刷新、NumberPicker、ColorPalette、ColorPicker |
+| 高级能力 | 9 个 Window 组件、Glass 模糊/折射、OkHSV / OkLab / OkLCH、触觉回调与可调导航弹簧 |
 | Android Demo | 拖动/缩放悬浮窗口、触摸适配、系统输入法、主题切换、分类展示与中英文搜索 |
 
-Miuix 目录的 55 个名称中，目前有 46 项在同一 Surface 内提供对应交互；
-9 项 Window 系列的独立 Android 窗口后端尚未实现。
+Miuix 目录的 55 个名称均有对应交互。9 个 Window 组件在 Android Demo 中提交到
+独立的透明 Surface，支持 Vulkan / OpenGL；其他宿主可安装窗口回调，未接入时回退到 Overlay。
+Glass 使用有界 CPU 采样与模糊，不读取外部 GPU 纹理或系统壁纸。
 具体接口、差异与过渡行为见 [组件对照](docs/miuix-components.md)。
 使用 ImGui 内部 API，默认附带的版本为 `v1.93.0`；接入其他版本须自行验证兼容性。
 升级来源与适配细节见 [依赖版本](docs/dependencies.md)。

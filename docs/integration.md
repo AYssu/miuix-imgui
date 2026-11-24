@@ -123,3 +123,50 @@ view.Draw(router);
 
 Android 实现在 `src/Android_my_imgui/AndroidIme*.cpp` 和 `android/ime/`，不参与主机组件库构建。
 临时 APK 的静默回退、输入期间保留和结束后卸载约定见 [Android Demo](android-demo.md)。
+
+## 独立窗口、材质与设备反馈
+
+`Window*` 的 Begin/End 与 Overlay 遵循相同规则，触发仍用 `OpenDialog`，关闭仍用
+`CloseDialog`。独立宿主安装 `SetWindowRenderHandler`，在 `ImGui::Render()` 后、主绘制前调用
+`RenderWindowLayers(ImGui::GetDrawData())`。每个非零 ID 接收一组保持屏幕坐标的绘制数据；
+回调成功返回 true 才从主绘制移除该组。提交失败返回 false，主绘制保留内容。
+每帧最后的 `(0, nullptr)` 通知宿主回收本帧未使用的窗口，关闭动画完成前不得提前销毁。
+回调不能持有借用的 ImDrawData；宿主负责透明背景、正确层级、坐标和上下文、纹理共享。
+
+Android Demo 已接入 Vulkan / OpenGL：每个活动弹层拥有独立 SurfaceControl / ANativeWindow
+及交换链或 EGLSurface，触摸仍由现有输入桥统一处理。这不是 Activity 或 Android Dialog。
+Surface 使用主画布尺寸，窗口内部透明；仍受私有 Surface 接口和 root 限制。
+Vulkan 后端为安全复用上游顶点上传缓存，会在独立窗口提交之间等待队列，可能增加耗时。
+`HasWindowBackend()` 可查询回调是否安装；没有适配时 Window 接口退回同画布 Overlay。
+销毁前解除回调，再释放所有平台窗口；正常关闭、绘制失败和程序退出均须清理。
+
+`GlassBackdrop` 由宿主持有，先在同帧已画好的背景上 Capture，再 Draw，最后画玻璃上方内容：
+
+```cpp
+// 持久对象；与 ImGui 上下文同线程，最好在上下文销毁之前释放。
+skui::GlassBackdrop glass;
+// 每帧在已有窗口内，先绘制背景，再使用实际屏幕坐标：
+// glass.Capture(ImGui::GetWindowDrawList(), background_min, background_max);
+// glass.Draw(panel_min, panel_max, skui::GlassStyle{});
+```
+
+每个对象每帧绘制一块玻璃；多块用多个对象。后端必须支持 ImGui 1.93 动态纹理协议
+`RendererHasTextures`。CPU 采样长边最多 192 像素，读取 ImDrawList 的 CPU 纹理像素；
+不支持 GPU 专有外部纹理、自定义绘制回调或跨画布桌面采样。模糊与边缘折射是有界 CPU 实现。
+尺寸变化和销毁通过动态纹理协议退休资源。宿主必须继续驱动协议直至资源回收，不能提前卸载渲染器。
+
+`TopAppBarState` 跨帧保存，把滚动区域的 `GetScrollY()` 写入 `scroll_offset`，由
+`CollapsingTopAppBar` 在展开/折叠高度之间连续插值，同帧跟随滚动，不额外添加追赶动画；`collapse_range` 是逻辑单位，offset 为实际像素。
+`Theme::motion_response/motion_damping` 调整路由弹簧，`motion_duration_scale` 调整共享状态、
+路由和弹层时长；关闭 animations 则立即完成离散过渡。数字滚轮的惯性/吸附独立管理。
+
+`ColorPicker(label, color, ColorSpace::OkHSV/OkLab/OkLCH)` 保留旧 HSV 接口；
+`ToColorSpace/FromColorSpace` 的输入/输出在头文件注明，alpha 原样保留。
+OkLab 的 a/b 和 OkLCH 的 C 可超出 sRGB 色域，显示时裁切到 [0,1]；编辑坐标跨帧保留，
+外部改变 RGBA 后重新同步，不提供 HDR / 广色域输出。
+
+`SetHapticHandler` 接收 Press / Selection / Confirm，库只发事件；宿主负责系统服务与节流。
+触屏按钮激活自动发 Press，其他语义可调用 `PerformHaptic`；`Theme::haptics=false` 停用。
+Android Demo 的适配使用 Android 12+ 的 vibrator_manager 命令、异步子进程和 45ms 节流，
+不使用强制绕过勿扰选项，命令不可用时静默跳过。其他宿主可接自己的反馈 API。
+回调在渲染线程执行，用户数据须保持有效，退出前解除回调。

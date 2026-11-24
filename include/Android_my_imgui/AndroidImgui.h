@@ -48,6 +48,8 @@ public:
     AndroidImgui() = default;
 
     virtual ~AndroidImgui() = default;
+    virtual bool RenderPlatformWindow(unsigned int id,ImDrawData *data) {return false;}
+    virtual void ClosePlatformWindows() {}
 
     bool Init_Render(ANativeWindow *window, float width, float height);
 

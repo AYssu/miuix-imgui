@@ -5,6 +5,7 @@
 #include <vulkan/vulkan_android.h>
 #include <android/native_window.h>
 #include <unistd.h>
+#include "native_surface/ANativeWindowCreator.h"
 
 #ifndef NDEBUG
 
@@ -387,6 +388,50 @@ void VulkanGraphics::PrepareShutdown() {
     VkResult err = vkDeviceWaitIdle(m_Device);
     check_vk_result(err);
     ImGui_ImplVulkan_Shutdown();
+}
+bool VulkanGraphics::RenderPlatformWindow(unsigned int id,ImDrawData *data) {
+    if(!data) {
+        for(auto it=m_Layers.begin();it!=m_Layers.end();) {
+            if(it->second.frame==ImGui::GetFrameCount()) {++it;continue;}
+            auto &layer=it->second;
+            ImGui_ImplVulkanH_DestroyWindow(m_Instance,m_Device,layer.target.get(),m_Allocator);
+            vkDestroySurfaceKHR(m_Instance,layer.target->Surface,m_Allocator);
+            android::ANativeWindowCreator::Destroy(layer.window);it=m_Layers.erase(it);
+        }
+        return true;
+    }
+    auto &layer=m_Layers[id];
+    if(!layer.window) {
+        char name[48];snprintf(name,sizeof(name),"skui-window-%08x",id);
+        layer.window=android::ANativeWindowCreator::Create(name,ANativeWindow_getWidth(m_Window),ANativeWindow_getHeight(m_Window),false);
+        if(!layer.window) {m_Layers.erase(id);return false;}
+        layer.target=std::make_unique<ImGui_ImplVulkanH_Window>();
+        VkAndroidSurfaceCreateInfoKHR info{};info.sType=VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;info.window=layer.window;
+        if(vkCreateAndroidSurfaceKHR(m_Instance,&info,m_Allocator,&layer.target->Surface)!=VK_SUCCESS) {
+            android::ANativeWindowCreator::Destroy(layer.window);m_Layers.erase(id);return false;
+        }
+        layer.target->SurfaceFormat=wd->SurfaceFormat;layer.target->PresentMode=wd->PresentMode;
+        ImGui_ImplVulkanH_CreateOrResizeWindow(m_Instance,m_PhysicalDevice,m_Device,layer.target.get(),m_QueueFamily,m_Allocator,
+            ANativeWindow_getWidth(m_Window),ANativeWindow_getHeight(m_Window),m_MinImageCount,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    }
+    // The upstream backend shares its vertex upload ring between draw-data
+    // submissions. Retire previous work before reusing it across native surfaces.
+    vkQueueWaitIdle(m_Queue);
+    bool main_rebuild=m_SwapChainRebuild;m_SwapChainRebuild=false;
+    wd.swap(layer.target);Render(data);wd.swap(layer.target);
+    bool okay=!m_SwapChainRebuild;m_SwapChainRebuild=main_rebuild;
+    vkQueueWaitIdle(m_Queue);
+    if(okay) layer.frame=ImGui::GetFrameCount();return okay;
+}
+void VulkanGraphics::ClosePlatformWindows() {
+    vkDeviceWaitIdle(m_Device);
+    for(auto &entry:m_Layers) {
+        auto &layer=entry.second;
+        ImGui_ImplVulkanH_DestroyWindow(m_Instance,m_Device,layer.target.get(),m_Allocator);
+        vkDestroySurfaceKHR(m_Instance,layer.target->Surface,m_Allocator);
+        android::ANativeWindowCreator::Destroy(layer.window);
+    }
+    m_Layers.clear();
 }
 
 void VulkanGraphics::Cleanup() {

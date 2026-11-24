@@ -163,6 +163,26 @@ bool TopAppBar(const char *id,const char *title,const char *subtitle,bool can_go
 bool NavigationBar(const char *id,const NavItem *items,int count,int *selected) {
     return Navigation(id,items,count,selected,false);
 }
+bool CollapsingTopAppBar(const char *id,const char *title,TopAppBarState *state,const char *subtitle,bool back) {
+    if(!state) return TopAppBar(id,title,subtitle,back);
+    ImGui::PushID(id);ImGui::BeginGroup();
+    float target=std::clamp(state->scroll_offset/std::max(1.f,Dp(state->collapse_range)),0.f,1.f);
+    // Scrolling is continuous input. Interpolate geometry directly from its
+    // offset instead of restarting a timed animation on every scroll frame.
+    state->collapsed_fraction=target;
+    float t=state->collapsed_fraction,height=Dp(104-48*t);
+    auto p=ImGui::GetCursorScreenPos();float width=ImGui::GetContentRegionAvail().x;
+    bool clicked=false;
+    if(back) {clicked=IconButton("back",Icon::Back);}
+    auto color=TextColor();float font=28-8*t,left=back ? 46*t : 0;
+    auto *draw=ImGui::GetWindowDrawList();
+    draw->PushClipRect(p,At(p,width,height),true);
+    Label(At(p,Dp(left),Dp(42-30*t)),title,font,color);
+    if(subtitle) {color=MutedColor();color.w*=1-t;Label(At(p,0,Dp(82)),subtitle,12,color);}
+    draw->PopClipRect();
+    ImGui::SetCursorScreenPos(p);ImGui::Dummy(ImVec2(width,height));
+    ImGui::EndGroup();ImGui::PopID();return clicked;
+}
 bool NavigationRail(const char *id,const NavItem *items,int count,int *selected,bool *expanded) {
     if (!expanded) return Navigation(id,items,count,selected,true);
     if (!items || !selected || count<=0) return false;

@@ -464,6 +464,48 @@ bool ColorPicker(const char *label, ImVec4 *color, bool alpha) {
     ImGui::PopID();
     return changed;
 }
+bool ColorPicker(const char *label,ImVec4 *color,ColorSpace space,bool alpha) {
+    if(space==ColorSpace::HSV) return ColorPicker(label,color,alpha);
+    if(!color) return false;
+    ImGui::PushID(label);ImGui::PushID(static_cast<int>(space));Text(label);
+    auto preview=ImGui::GetCursorScreenPos();float width=ImGui::GetContentRegionAvail().x;
+    ImGui::Dummy(ImVec2(width,Dp(32)));
+    auto channels=ToColorSpace(*color,space);auto *state=ImGui::GetStateStorage();
+    const char *rgba_keys[]={"out-r","out-g","out-b","out-a"};
+    const char *channel_keys[]={"channel-0","channel-1","channel-2","channel-3"};
+    bool own_value=state->GetBool(ImGui::GetID("color-initialized"));
+    for(int i=0;i<4;++i) own_value=own_value && state->GetFloat(ImGui::GetID(rgba_keys[i]))==(&color->x)[i];
+    // Keep edited coordinates when gamut clipping loses information. Rebuilding
+    // a/b/C from clipped sRGB every frame would move the slider under the finger.
+    if(own_value) for(int i=0;i<4;++i) (&channels.x)[i]=state->GetFloat(ImGui::GetID(channel_keys[i]));
+    if(space==ColorSpace::OkHSV) {
+        if(channels.y<1e-5f || channels.z<1e-5f) channels.x=state->GetFloat(ImGui::GetID("hue"),channels.x);
+        if(channels.z<1e-5f) channels.y=state->GetFloat(ImGui::GetID("saturation"),channels.y);
+    } else if(space==ColorSpace::OkLCH && channels.y<1e-5f) channels.z=state->GetFloat(ImGui::GetID("hue"),channels.z);
+    bool changed=false;
+    if(space==ColorSpace::OkHSV) {
+        changed=Slider("色相",&channels.x,0,1,"%.3f",ImGuiSliderFlags_NoRoundToFormat);
+        changed=Slider("饱和度",&channels.y,0,1,"%.3f",ImGuiSliderFlags_NoRoundToFormat)||changed;
+        changed=Slider("明度",&channels.z,0,1,"%.3f",ImGuiSliderFlags_NoRoundToFormat)||changed;
+        state->SetFloat(ImGui::GetID("hue"),channels.x);state->SetFloat(ImGui::GetID("saturation"),channels.y);
+    } else {
+        changed=Slider("感知亮度 L",&channels.x,0,1,"%.3f",ImGuiSliderFlags_NoRoundToFormat);
+        changed=Slider(space==ColorSpace::OkLab ? "绿—红 a" : "色度 C",&channels.y,
+            space==ColorSpace::OkLab ? -.4f : 0,.4f,"%.3f",ImGuiSliderFlags_NoRoundToFormat)||changed;
+        changed=Slider(space==ColorSpace::OkLab ? "蓝—黄 b" : "色相 h",&channels.z,
+            space==ColorSpace::OkLab ? -.4f : 0,space==ColorSpace::OkLab ? .4f : 1,"%.3f",ImGuiSliderFlags_NoRoundToFormat)||changed;
+        if(space==ColorSpace::OkLCH) state->SetFloat(ImGui::GetID("hue"),channels.z);
+    }
+    if(alpha) changed=Slider("透明度",&channels.w,0,1,"%.3f",ImGuiSliderFlags_NoRoundToFormat)||changed;
+    if(changed) *color=FromColorSpace(channels,space);
+    state->SetBool(ImGui::GetID("color-initialized"),true);
+    for(int i=0;i<4;++i) {
+        state->SetFloat(ImGui::GetID(rgba_keys[i]),(&color->x)[i]);
+        state->SetFloat(ImGui::GetID(channel_keys[i]),(&channels.x)[i]);
+    }
+    ColorPreview(ImGui::GetWindowDrawList(),preview,Offset(preview,width,Dp(32)),*color);
+    ImGui::PopID();ImGui::PopID();return changed;
+}
 bool ColorPalette(const char *id, ImVec4 *color, const ImVec4 *colors, int count) {
     if (!color || !colors || count <= 0) return false;
     ImGui::PushID(id);

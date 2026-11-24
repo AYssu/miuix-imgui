@@ -34,7 +34,15 @@ struct Theme {
     bool animations = true; // false: immediate state/layout changes, no picker inertia
     float scale = 1.0f;
     ImVec4 accent{0.20f, 0.48f, 1.0f, 1.0f};
+    bool haptics = true;
+    float motion_response = .8f, motion_damping = .95f, motion_duration_scale = 1.f;
 };
+// Analytic spring step response. Parameters use Miuix's normalized duration.
+float SpringProgress(float fraction, float response = .8f, float damping = .95f);
+enum class Haptic { Press, Selection, Confirm };
+using HapticHandler = void (*)(Haptic, void *);
+void SetHapticHandler(HapticHandler handler, void *user_data = nullptr);
+void PerformHaptic(Haptic event);
 
 // Apply after the host has selected its ImGui context, before Begin(). The host
 // owns the context, fonts, input and renderer; the library never creates them.
@@ -132,6 +140,12 @@ int ListPopup(const char *id, const PopupItem *items, int count);
 bool RangeSlider(const char *label, float *lower, float *upper, float minimum, float maximum);
 bool NumberPicker(const char *label, int *value, int minimum, int maximum, int step = 1);
 bool ColorPicker(const char *label, ImVec4 *color, bool alpha = true);
+enum class ColorSpace { HSV, OkHSV, OkLab, OkLCH };
+// Components: HSV/OkHSV h,s,v in [0,1]; OkLab L,a,b; OkLCH L,C,h in turns.
+// The fourth component always preserves alpha. sRGB values use the sRGB transfer function.
+ImVec4 ToColorSpace(ImVec4 srgb, ColorSpace space);
+ImVec4 FromColorSpace(ImVec4 value, ColorSpace space);
+bool ColorPicker(const char *label, ImVec4 *color, ColorSpace space, bool alpha = true);
 bool ColorPalette(const char *id, ImVec4 *color, const ImVec4 *colors, int count);
 // HSV grid with a gray column, alpha slider and checkerboard preview.
 bool ColorPalette(const char *id, ImVec4 *color);
@@ -166,12 +180,59 @@ void CloseDialog();
 bool BeginBottomSheet(const char *id, const char *title, float height = 340);
 void EndBottomSheet();
 
+// Host hook: receive a frame's separate native layers, then render the remaining
+// main draw data. id=0/data=null marks end-of-frame and retires unused surfaces.
+// Return false to retain that layer in the main renderer after a platform failure.
+using WindowRenderHandler = bool (*)(ImGuiID id, ImDrawData *data, void *user_data);
+void SetWindowRenderHandler(WindowRenderHandler handler, void *user_data = nullptr);
+bool HasWindowBackend();
+void RenderWindowLayers(ImDrawData *main_data);
+bool WindowDropdownPreference(const char *label,int *selected,const ChoiceItem *items,int count,const char *description=nullptr);
+bool WindowSpinnerPreference(const char *label,int *selected,const ChoiceItem *items,int count,const char *description=nullptr);
+int WindowListPopup(const char *id,const PopupItem *items,int count);
+int WindowCascadingListPopup(const char *id,const PopupItem *items,int count);
+int WindowDropdownMenu(const char *label,const PopupItem *items,int count);
+int WindowIconDropdownMenu(const char *id,const PopupItem *items,int count);
+int WindowIconCascadingDropdownMenu(const char *id,const PopupItem *items,int count);
+bool BeginWindowDialog(const char *id,const char *title,float width=340);
+void EndWindowDialog();
+bool BeginWindowBottomSheet(const char *id,const char *title,float height=340);
+void EndWindowBottomSheet();
+
+struct GlassStyle {
+    float blur = 12, refraction = 4, saturation = 1.2f, rounding = 24;
+    ImVec4 tint{1,1,1,.22f};
+};
+// Capture the already drawn background before painting glass, excluding the
+// glass itself. Own on the rendering thread; capture is downsampled and bounded.
+class GlassBackdrop {
+  public:
+    GlassBackdrop();
+    ~GlassBackdrop();
+    GlassBackdrop(const GlassBackdrop &)=delete;
+    GlassBackdrop &operator=(const GlassBackdrop &)=delete;
+    bool Capture(ImDrawList *source,ImVec2 min,ImVec2 max);
+    bool Draw(ImVec2 min,ImVec2 max,const GlassStyle &style = {});
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 struct NavItem {
     const char *label;
     Icon icon;
 };
 // Independent layout pieces; dimensions are logical units scaled by Theme.
 bool TopAppBar(const char *id, const char *title, const char *subtitle = nullptr, bool can_go_back = false);
+struct TopAppBarState {
+    float scroll_offset = 0;
+    float collapse_range = 64;
+    float collapsed_fraction = 0; // Updated by CollapsingTopAppBar.
+};
+// Set scroll_offset from the associated scroll child every frame. The state
+// owns no gesture; the content remains the sole owner of scrolling.
+bool CollapsingTopAppBar(const char *id,const char *title,TopAppBarState *state,
+                         const char *subtitle=nullptr,bool can_go_back=false);
 bool NavigationBar(const char *id, const NavItem *items, int count, int *selected);
 // An expanded pointer enables the built-in toggle; the caller owns its state.
 // nullptr keeps the original expanded layout without a toggle.

@@ -16,11 +16,10 @@ struct DeleteMesh {
 using Mesh = std::unique_ptr<ImDrawList,DeleteMesh>;
 using Scene = std::vector<Mesh>;
 
-// Miuix NavProgrammaticEasing: critically damped response=.24s, 500ms driver.
-// Reference: compose-miuix-ui/miuix @ 93e5f80f, NavSettleEasing.kt.
+// Miuix NavProgrammaticEasing, normalized response=.8 / damping=.95 (07d48590).
 float PageProgress(float seconds) {
-    float u=2*IM_PI/.24f*seconds;
-    return std::clamp(1-(1+u)*std::exp(-u),0.f,1.f);
+    return std::clamp(SpringProgress(seconds/(.5f*std::max(.05f,GetTheme().motion_duration_scale)),
+        GetTheme().motion_response,GetTheme().motion_damping),0.f,1.f);
 }
 
 struct CornerClip {
@@ -305,7 +304,7 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
         ImGui::ClosePopupsOverWindow(ImGui::GetCurrentWindow(),true);
     }
     if(!GetTheme().animations || !continuous) s.Stop();
-    float duration=s.direction==Router::Navigation::Reset ? .2f : .5f;
+    float duration=(s.direction==Router::Navigation::Reset ? .2f : .5f)*std::max(.05f,GetTheme().motion_duration_scale);
     if(s.moving) {
         if(!changed) s.elapsed+=ImGui::GetIO().DeltaTime;
         if(s.elapsed+1e-6f>=duration) s.Stop();

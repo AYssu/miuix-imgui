@@ -6,6 +6,7 @@
 #define ANDROIDIMGUI_OPENGLGRAPHICS_H
 
 #include <EGL/egl.h>
+#include <map>
 #include "AndroidImgui.h"
 
 class OpenGLGraphics : public AndroidImgui {
@@ -16,11 +17,16 @@ private:
     EGLDisplay m_EglDisplay = EGL_NO_DISPLAY;
     EGLSurface m_EglSurface = EGL_NO_SURFACE;
     EGLContext m_EglContext = EGL_NO_CONTEXT;
+    EGLConfig m_EglConfig{};
+    struct NativeLayer {ANativeWindow *window=nullptr;EGLSurface surface=EGL_NO_SURFACE;int frame=-1;};
+    std::map<unsigned int,NativeLayer> m_Layers;
 public:
     OpenGLGraphics() {
 		snprintf(RenderName, sizeof(RenderName), "OpenGL");
     }
     bool Create() override;
+    bool RenderPlatformWindow(unsigned int id,ImDrawData *data) override;
+    void ClosePlatformWindows() override;
 
     void Setup() override;
 

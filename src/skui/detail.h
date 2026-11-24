@@ -12,6 +12,7 @@ inline float Animate(const char *key, float target, float seconds = .22f,
 }
 // Paint the last item's owned press; a released touch position is not a hover.
 float InteractionFeedback(float hover, float press);
+bool &WindowScope();
 // Exclude input during exit without introducing the disabled-state gray tint.
 void BeginInert(bool inert, bool clear_window_active = true);
 void EndInert();

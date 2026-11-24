@@ -13,9 +13,12 @@
 | src/skui/layout.cpp | 容器、顶栏、导航、Preference 与布局 |
 | src/skui/components.cpp | 选择、级联菜单、颜色与数字等扩展组件 |
 | src/skui/overlay.cpp | 浮层、遮罩、进退场与输入隔离 |
+| src/skui/window.cpp | Window 作用域、绘制分层与宿主回调；平台资源由 Android 后端管理 |
+| src/skui/glass.cpp / color.cpp | Glass 材质生命周期与感知色彩数学 |
 | src/skui/navigation.cpp | RouterView 绘制快照与页面动画 |
 | src/skui/detail.h | 内部共享能力，不供宿主接入 |
 | examples/gallery/gallery.cpp | 可发现、可操作的演示与分类搜索 |
+| tests/advanced_tests.cpp | 独立窗口分层、色彩参考、Glass 纹理回收、触觉与动态顶栏 |
 | tests/skui_tests.cpp | 无设备的交互、布局和回归验证 |
 
 新增 `.cpp` 后显式加入 `CMakeLists.txt`，不使用目录 glob 偷带测试或平台实现。

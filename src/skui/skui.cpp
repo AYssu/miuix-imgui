@@ -13,6 +13,9 @@ namespace {
 thread_local Theme theme;
 thread_local TextInputHandler text_input_handler = nullptr;
 thread_local void *text_input_user_data = nullptr;
+thread_local HapticHandler haptic_handler=nullptr;
+thread_local void *haptic_data=nullptr;
+thread_local ImGuiContext *haptic_context=nullptr;
 bool UpdateTextInput(char *buffer, std::size_t capacity) {
     if (!text_input_handler)
         return false;
@@ -104,7 +107,10 @@ float Animate(ImGuiID id, float target, float seconds, float initial) {
     }
     if (previous != target) { from = value; elapsed = 0; }
     if (last != frame) elapsed += ImGui::GetIO().DeltaTime;
-    float t = GetTheme().animations && seconds > 0 ? std::clamp(elapsed / seconds, 0.f, 1.f) : 1.f;
+    float duration=seconds*GetTheme().motion_duration_scale;
+    float t = GetTheme().animations && duration > 0 ? std::clamp(elapsed / duration, 0.f, 1.f) : 1.f;
+    // Layout reveals keep a gentle start. The navigation spring belongs to
+    // page transitions, not short press feedback or collapsing geometry.
     value = t == 1 ? target : ImLerp(from, target, t*t*(3-2*t));
     if (t == 1) from = target;
     s->SetFloat(key("motion/value"), value);
@@ -115,6 +121,8 @@ float Animate(ImGuiID id, float target, float seconds, float initial) {
     return value;
 }
 float InteractionFeedback(float hover, float press) {
+    if(ImGui::IsItemActivated() && ImGui::GetIO().MouseSource==ImGuiMouseSource_TouchScreen)
+        PerformHaptic(Haptic::Press);
     const bool hovered=ImGui::IsItemHovered();
     const bool held=ImGui::IsItemActive() &&
         (hovered || GImGui->ActiveIdSource==ImGuiInputSource_Keyboard ||
@@ -197,6 +205,30 @@ bool CanScroll() {
 }
 } // namespace detail
 
+// Analytic oscillator solution; Miuix's default is response=.8, damping=.95.
+// Adapted from Miuix NavProgrammaticEasing, commit 07d48590.
+// Copyright 2026, compose-miuix-ui contributors. Apache-2.0.
+// C++ adaptation adds critical/overdamping, validation and final-frame snap.
+float SpringProgress(float fraction,float response,float damping) {
+    if(!std::isfinite(fraction)) return 1;
+    if(fraction<=0) return 0;if(fraction>=1) return 1;
+    response=std::isfinite(response) ? std::clamp(response,.05f,4.f) : .8f;
+    damping=std::isfinite(damping) ? std::clamp(damping,0.f,4.f) : .95f;
+    double omega=2*IM_PI/response,t=fraction,z=damping;
+    if(std::abs(z-1)<1e-4) return static_cast<float>(1-(1+omega*t)*std::exp(-omega*t));
+    if(z<1) {
+        double w=omega*std::sqrt(1-z*z);
+        return static_cast<float>(1-std::exp(-z*omega*t)*(std::cos(w*t)+z*omega/w*std::sin(w*t)));
+    }
+    double a=-omega*(z-std::sqrt(z*z-1)),b=-omega*(z+std::sqrt(z*z-1));
+    return static_cast<float>(1-(b*std::exp(a*t)-a*std::exp(b*t))/(b-a));
+}
+void SetHapticHandler(HapticHandler handler,void *data) {
+    haptic_handler=handler;haptic_data=data;haptic_context=ImGui::GetCurrentContext();
+}
+void PerformHaptic(Haptic event) {
+    if(theme.haptics && haptic_handler && haptic_context==ImGui::GetCurrentContext()) haptic_handler(event,haptic_data);
+}
 float Dp(float v) { return v * theme.scale; }
 const Theme &GetTheme() { return theme; }
 ImVec4 Background() { return Color(0xF5F6F8, 0x121316); }
@@ -206,6 +238,7 @@ ImVec4 MutedColor() { return Color(0x7B808D, 0x9CA1AE); }
 void ApplyTheme(const Theme &value) {
     theme = value;
     theme.scale = std::max(.5f, std::min(4.f, theme.scale));
+    theme.motion_duration_scale=std::isfinite(theme.motion_duration_scale) ? std::clamp(theme.motion_duration_scale,.05f,10.f) : 1.f;
     ImGuiStyle style;
     const auto &host_style=ImGui::GetStyle();
     style.FontSizeBase=host_style.FontSizeBase;

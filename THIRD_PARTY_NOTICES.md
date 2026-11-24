@@ -2,6 +2,7 @@
 
 根目录 [MIT 许可](LICENSE) 适用于项目作者有权授权的新增代码，包括 `include/skui/`、
 `src/skui/`、Gallery、最小示例、测试及本项目新增的 IME 桥接、文档和构建脚本。
+其中 SpringProgress 和颜色数学的第三方改编部分分别按下表许可处理。
 它不覆盖第三方原始代码，也不为来源未确认的历史代码补授许可。
 已有原始版权头和许可注释必须保留。
 
@@ -14,6 +15,8 @@
 | ProggyClean | src/ImGui/imgui_draw.cpp 内嵌默认字体 | [MIT](LICENSES/ProggyClean-MIT.txt)，Tristan Grimmer |
 | ProggyForever | src/ImGui/imgui_draw.cpp 内嵌可缩放默认字体 | [MIT](LICENSES/ProggyForever-MIT.txt)，Disco Hello、Tristan Grimmer |
 | gl3w / Khronos GL 声明 | include/ImGui/backends/imgui_impl_opengl3_loader.h | gl3w 为 Unlicense，Khronos 部分为 MIT；许可原文保留在该文件头部 |
+| Miuix 导航弹簧 | src/skui/skui.cpp 的 SpringProgress；参考 compose-miuix-ui/miuix 提交 07d4859021d7aed1a1f78afaee12c5c8a6917466 的 NavSettleEasing.kt | [Apache-2.0](LICENSES/Apache-2.0.txt)，Copyright 2026 compose-miuix-ui contributors；C++ 改编增加临界/过阻尼、参数边界与末帧归一 |
+| Ok-color | src/skui/color.cpp；bottosson/bottosson.github.io 提交 d69831edb90ffdcd08b7e64da3c5405acd48ad2c 的 misc/colorpicker/colorconversion.js | [MIT](LICENSES/Ok-color-MIT.txt)，Copyright 2021 Björn Ottosson；C++ 改编采用数值求 cusp，增加 alpha 与 sRGB 裁切 |
 | Google Vulkan wrapper | include/Android_Graphics/vulkan_wrapper.h、src/Android_Graphics/vulkan_wrapper.cpp | [Apache-2.0](LICENSES/Apache-2.0.txt)，Copyright 2016 Google Inc. |
 | FreeType | 构建时获取 VER-2-13-3，不提交旧预编译归档 | 选择 [FreeType License](LICENSES/FreeType-FTL.txt)，另见 [许可汇总](LICENSES/FreeType-LICENSE.txt)、[BDF](LICENSES/FreeType-BDF.txt)、[PCF](LICENSES/FreeType-PCF.txt) 说明 |
 
@@ -28,6 +31,8 @@ Dear ImGui 的日本字形范围数据在 `imgui_draw.cpp` 中另外保留了政
 上游参考：
 
 - Dear ImGui：<https://github.com/ocornut/imgui>（本次源码和许可均来自 v1.93.0，归档校验见 [依赖版本](docs/dependencies.md)）
+- Miuix：<https://github.com/compose-miuix-ui/miuix/tree/07d4859021d7aed1a1f78afaee12c5c8a6917466>
+- Ok-color：<https://github.com/bottosson/bottosson.github.io/tree/d69831edb90ffdcd08b7e64da3c5405acd48ad2c/misc/colorpicker>
 - stb：<https://github.com/nothings/stb>
 - FreeType：<https://github.com/freetype/freetype/tree/VER-2-13-3>
 - FreeType 归档：<https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-13-3>

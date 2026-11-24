@@ -7,6 +7,7 @@
 
 
 #include <memory>
+#include <map>
 #include "vulkan_wrapper.h"
 #include "AndroidImgui.h"
 #include "imgui_impl_vulkan.h"
@@ -35,6 +36,12 @@ private:
     std::unique_ptr<ImGui_ImplVulkanH_Window> wd{};
     int m_MinImageCount = 2;
     bool m_SwapChainRebuild = false;
+    struct NativeLayer {
+        ANativeWindow *window=nullptr;
+        std::unique_ptr<ImGui_ImplVulkanH_Window> target;
+        int frame=-1;
+    };
+    std::map<unsigned int,NativeLayer> m_Layers;
 
     int m_LastWidth = 0;
     int m_LastHeight = 0;
@@ -43,6 +50,8 @@ public:
 		snprintf(RenderName, sizeof(RenderName), "Vulkan");
     }
     bool Create() override;
+    bool RenderPlatformWindow(unsigned int id,ImDrawData *data) override;
+    void ClosePlatformWindows() override;
 
     void Setup() override;
 

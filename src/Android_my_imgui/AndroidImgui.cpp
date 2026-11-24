@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "my_imgui_impl_android.h"
 #include "stb_image.h"
+#include "skui/skui.h"
 
 bool AndroidImgui::Init_Render(ANativeWindow *window, float width, float height) {
     m_Window = window;
@@ -30,6 +31,9 @@ bool AndroidImgui::Init_Render(ANativeWindow *window, float width, float height)
     My_ImGui_ImplAndroid_Init(window);
 
     Setup();
+    skui::SetWindowRenderHandler([](ImGuiID id,ImDrawData *data,void *user) {
+        return static_cast<AndroidImgui *>(user)->RenderPlatformWindow(id,data);
+    },this);
     return true;
 }
 
@@ -41,10 +45,14 @@ void AndroidImgui::NewFrame(bool resize) {
 
 void AndroidImgui::EndFrame() {
     ImGui::Render();
+    skui::RenderWindowLayers(ImGui::GetDrawData());
     Render(ImGui::GetDrawData());
 }
 
 void AndroidImgui::Shutdown() {
+    skui::SetWindowRenderHandler(nullptr);
+    skui::SetHapticHandler(nullptr);
+    ClosePlatformWindows();
     for (auto &texture: m_Textures) {
         RemoveTexture(texture);
     }

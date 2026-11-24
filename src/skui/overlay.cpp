@@ -51,6 +51,7 @@ bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags) {
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse)) return false;
     auto *window = ImGui::GetCurrentWindow();
+    window->StateStorage.SetBool(ImHashStr("skui/native-window"),WindowScope() && HasWindowBackend());
     auto &state = window->StateStorage;
     if (ImGui::IsWindowAppearing()) {
         state.SetFloat(elapsed_key, 0);
@@ -60,7 +61,7 @@ bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags) {
     float duration = exit ? (kind == OverlayKind::Popup ? .22f : .26f) : .3f;
     float elapsed = state.GetFloat(elapsed_key)+(window->Appearing ? 0.f : ImGui::GetIO().DeltaTime);
     state.SetFloat(elapsed_key,elapsed);
-    float t = GetTheme().animations ? std::clamp(elapsed/duration, 0.f, 1.f) : 1.f;
+    float t = GetTheme().animations ? std::clamp(elapsed/(duration*GetTheme().motion_duration_scale), 0.f, 1.f) : 1.f;
     if (exit && t >= 1) {
         // Begin already emitted an opaque window background. Exclude this
         // terminal frame from rendering instead of flashing that background.

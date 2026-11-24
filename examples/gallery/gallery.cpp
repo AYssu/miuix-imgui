@@ -16,7 +16,7 @@ const Category categories[] = {
     {"导航与布局", "侧栏、底栏、标签、顶栏与容器", skui::Icon::Layout},
     {"反馈与刷新", "提示、进度、角标与下拉刷新", skui::Icon::Info},
     {"颜色与数字", "数字滚轮、色板与连续调色", skui::Icon::Sun},
-    {"平台窗口", "独立 Android 窗口：尚未提供", skui::Icon::Layout}
+    {"平台窗口", "独立 Surface 的列表、菜单与面板", skui::Icon::Layout}
 };
 struct Entry { const char *name; int category; const char *note; bool available = true; };
 const Entry entries[]={
@@ -35,6 +35,10 @@ const Entry entries[]={
     {"Icon",0,"图标展示"},{"FloatingActionButton",0,"开启底部悬浮操作"},
     {"FloatingToolbar",0,"开启底部悬浮操作"},{"Divider",0,"内容分隔线"},
     {"PullToRefresh",4,"顶部下拉、松开刷新"},{"SearchBar",1,"文本搜索"},
+    {"Glass",3,"背景模糊、折射与圆角阴影"},
+    {"CollapsingTopAppBar",3,"随滚动折叠的大标题"},
+    {"HapticFeedback",4,"按压、选择与确认的触觉反馈"},
+    {"Motion",4,"响应、阻尼与动画时长"},
     {"ColorPalette",5,"HSV 网格、灰度列、透明度"},{"ColorPicker",5,"HSV 连续调色"},
     {"ArrowPreference",1,"可导航的设置行"},{"SwitchPreference",1,"开关与说明"},
     {"CheckboxPreference",1,"复选与说明"},{"RadioButtonPreference",1,"单选与说明"},
@@ -47,15 +51,15 @@ const Entry entries[]={
     {"OverlayIconDropdownMenu",2,"图标触发操作菜单"},
     {"OverlayIconCascadingDropdownMenu",2,"图标触发二级菜单"},
     {"OverlayBottomSheet",2,"应用窗口内底部面板"},{"OverlayDialog",2,"确认与取消对话框"},
-    {"WindowListPopup",6,"尚未提供独立 Android 窗口",false},
-    {"WindowCascadingListPopup",6,"尚未提供独立 Android 窗口",false},
-    {"WindowDropdownPreference",6,"尚未提供独立 Android 窗口",false},
-    {"WindowSpinnerPreference",6,"尚未提供独立 Android 窗口",false},
-    {"WindowDropdownMenu",6,"尚未提供独立 Android 窗口",false},
-    {"WindowIconDropdownMenu",6,"尚未提供独立 Android 窗口",false},
-    {"WindowIconCascadingDropdownMenu",6,"尚未提供独立 Android 窗口",false},
-    {"WindowBottomSheet",6,"尚未提供独立 Android 窗口",false},
-    {"WindowDialog",6,"尚未提供独立 Android 窗口",false}
+    {"WindowListPopup",6,"独立窗口组件"},
+    {"WindowCascadingListPopup",6,"独立窗口组件"},
+    {"WindowDropdownPreference",6,"独立窗口组件"},
+    {"WindowSpinnerPreference",6,"独立窗口组件"},
+    {"WindowDropdownMenu",6,"独立窗口组件"},
+    {"WindowIconDropdownMenu",6,"独立窗口组件"},
+    {"WindowIconCascadingDropdownMenu",6,"独立窗口组件"},
+    {"WindowBottomSheet",6,"独立窗口组件"},
+    {"WindowDialog",6,"独立窗口组件"}
 };
 
 struct Gallery {
@@ -79,7 +83,10 @@ struct Gallery {
     bool initialized = false;
     float scale = 2.2f;
     ImVec2 window_pos{}, window_size{};
-    int sample_nav=0;
+    int sample_nav=0, color_space=0;
+    skui::GlassBackdrop glass;
+    skui::GlassStyle glass_style;
+    skui::TopAppBarState appbar;
     char catalogue_search[96]="";
 
     void Message(const char *text) { snackbar.Show(text); }
@@ -122,13 +129,22 @@ struct Gallery {
                 router.Push("/component-demo","OverlaySpinnerPreference");
         }
         skui::EndCard();
+        skui::Section("材质与平台能力");
+        if(skui::BeginCard("advanced-entry")) {
+            if(skui::ArrowPreference("glass-entry","Glass","背景模糊、折射与实时材质"))
+                router.Push("/component-demo","Glass");
+            skui::Divider();
+            if(skui::ArrowPreference("window-entry","Window 独立窗口","九种窗口组件，打开与关闭后自动回收"))
+                router.Push("/catalogue","6");
+        }
+        skui::EndCard();
         skui::Section("按类别浏览");
         if(skui::BeginCard("component-categories")) {
             for(int i=0;i<7;++i) {
                 if(i) skui::Divider();
                 ImGui::PushID(i);
                 if(skui::BasicComponent("category",categories[i].title,nullptr,categories[i].icon,
-                                        i==6 ? "未实现" : nullptr,true)) {
+                                        nullptr,true)) {
                     catalogue_search[0]='\0';
                     router.Push("/catalogue",std::to_string(i));
                 }
@@ -172,6 +188,42 @@ struct Gallery {
             if(component=="Scaffold") skui::Caption("当前页面就是 Scaffold：顶栏、返回、内容区域与底部导航独立协作。");
             else if(component=="TopAppBar") {
                 if(skui::TopAppBar("top","示例标题","页面说明与返回操作",true)) Message("返回按钮已触发");
+            } else if(component=="CollapsingTopAppBar") {
+                skui::CollapsingTopAppBar("collapse","我的内容",&appbar,"向上滚动，标题逐渐收起",true);
+                skui::BeginScroll("appbar-content",ImVec2(0,skui::Dp(240)));
+                appbar.scroll_offset=ImGui::GetScrollY();
+                for(int i=0;i<20;++i) {char line[40];std::snprintf(line,sizeof(line),"内容 %02d",i+1);skui::ListItem(line,line,nullptr,nullptr,false);}
+                skui::EndScroll();
+            } else if(component=="Glass") {
+                skui::Slider("模糊",&glass_style.blur,0,24);skui::Slider("折射",&glass_style.refraction,0,12);
+                auto p=ImGui::GetCursorScreenPos();float w=ImGui::GetContentRegionAvail().x,h=skui::Dp(220);
+                auto *d=ImGui::GetWindowDrawList();
+                d->AddRectFilled(p,ImVec2(p.x+w,p.y+h),ImGui::GetColorU32(ImVec4(.15f,.2f,.38f,1)),skui::Dp(24));
+                for(int i=0;i<9;++i) {
+                    float phase=static_cast<float>(ImGui::GetTime()*.4+i);
+                    d->AddCircleFilled(ImVec2(p.x+w*(.12f+.095f*i),p.y+h*(.5f+.23f*std::sin(phase))),skui::Dp(30),
+                        ImGui::GetColorU32(ImVec4(.3f+.06f*i,.65f,.95f-.08f*i,1)),32);
+                }
+                glass.Capture(d,p,ImVec2(p.x+w,p.y+h));
+                auto a=ImVec2(p.x+skui::Dp(22),p.y+skui::Dp(36)),b=ImVec2(p.x+w-skui::Dp(22),p.y+h-skui::Dp(36));
+                glass.Draw(a,b,glass_style);
+                d->AddText(ImVec2(a.x+skui::Dp(16),a.y+skui::Dp(28)),IM_COL32_WHITE,"Glass");
+                d->AddText(ImVec2(a.x+skui::Dp(16),a.y+skui::Dp(64)),IM_COL32_WHITE,"流动的背景，柔和的材质");
+                ImGui::Dummy(ImVec2(w,h));
+            } else if(component=="HapticFeedback") {
+                skui::Toggle("触觉反馈",&theme.haptics);
+                if(skui::Button("轻触")) skui::PerformHaptic(skui::Haptic::Press);
+                if(skui::Button("选择")) skui::PerformHaptic(skui::Haptic::Selection);
+                if(skui::Button("确认")) skui::PerformHaptic(skui::Haptic::Confirm);
+                skui::Caption("支持的设备会产生短促振动，系统勿扰设置仍然生效。");
+            } else if(component=="Motion") {
+                skui::Slider("响应",&theme.motion_response,.4f,1.5f,"%.2f");
+                skui::Slider("阻尼",&theme.motion_damping,.65f,1.5f,"%.2f");
+                skui::Slider("时长倍率",&theme.motion_duration_scale,.5f,2,"%.2f");
+                skui::Caption("响应与阻尼调整页面转场，时长倍率也控制折叠与弹层。");
+                if(skui::Button("查看路由转场")) router.Push("/detail","导航弹簧参数演示");
+                skui::Toggle("展开内容",&show_details);
+                skui::Collapsible("motion-sample",show_details,[]{skui::Space(20);skui::Text("可中途反向的展开过渡");skui::Space(80);});
             } else if(component=="NavigationBar") skui::NavigationBar("nav",navigation,3,&sample_nav);
             else if(component=="NavigationRail") {
                 skui::NavigationRail("nav",navigation,3,&sample_nav,&sample_sidebar_expanded);
@@ -252,12 +304,39 @@ struct Gallery {
                         {.96f,.43f,.24f,1},{.87f,.27f,.49f,1}};
                     skui::ColorPalette("presets",&picked_color,presets,5);
                     skui::Space(8);skui::ColorPalette("grid",&picked_color);
-                } else skui::ColorPicker("自定义颜色",&picked_color);
+                } else {
+                    const char *spaces[]={"HSV","OkHSV","OkLab","OkLCH"};
+                    skui::Combo("色彩空间",&color_space,spaces,4);
+                    skui::ColorPicker("自定义颜色",&picked_color,static_cast<skui::ColorSpace>(color_space));
+                }
                 if(skui::Button("设为强调色",skui::Tone::Primary,ImVec2(-1,0))) {
                     theme.accent=ImVec4(picked_color.x,picked_color.y,picked_color.z,1);Message("强调色已更新");
                 }
             }
-            else if(component=="OverlayListPopup") {
+            else if(component.rfind("Window",0)==0) {
+                if(!skui::HasWindowBackend()) skui::Caption("当前宿主没有安装独立窗口后端，使用同窗口浮层。");
+                if(component=="WindowDropdownPreference") skui::WindowDropdownPreference("外观",&choice,choices,3);
+                else if(component=="WindowSpinnerPreference") skui::WindowSpinnerPreference("外观",&spinner_choice,advanced_choices,4,"包含图标、摘要与禁用项");
+                else if(component=="WindowDialog" || component=="WindowBottomSheet") {
+                    bool sheet=component=="WindowBottomSheet";
+                    if(skui::Button("打开独立窗口")) skui::OpenDialog("native-panel");
+                    bool open=sheet ? skui::BeginWindowBottomSheet("native-panel","独立窗口面板",240) : skui::BeginWindowDialog("native-panel","确认操作");
+                    if(open) {
+                        skui::Caption("点击外部或完成按钮关闭。");
+                        if(skui::Button("完成",skui::Tone::Primary,ImVec2(-1,0))) skui::CloseDialog();
+                        if(sheet) skui::EndWindowBottomSheet();else skui::EndWindowDialog();
+                    }
+                } else {
+                    bool cascade=component.find("Cascading")!=std::string::npos;int action=-1;
+                    if(component.find("ListPopup")!=std::string::npos) {
+                        if(skui::Button("打开独立窗口列表")) skui::OpenDialog("native-list");
+                        action=cascade ? skui::WindowCascadingListPopup("native-list",actions,4) : skui::WindowListPopup("native-list",children,3);
+                    } else if(component.find("Icon")!=std::string::npos)
+                        action=cascade ? skui::WindowIconCascadingDropdownMenu("native-actions",actions,4) : skui::WindowIconDropdownMenu("native-actions",children,3);
+                    else action=skui::WindowDropdownMenu("打开操作菜单",children,3);
+                    if(action>=0) Message("独立窗口操作已完成");
+                }
+            } else if(component=="OverlayListPopup") {
                 if(skui::Button("打开三项列表")) skui::OpenDialog("standalone-list");
                 if(skui::ListPopup("standalone-list",children,3)>=0) Message("列表操作已触发");
             } else if(component=="OverlayCascadingListPopup") {
@@ -437,6 +516,7 @@ struct Gallery {
         if (skui::BeginCard("appearance")) {
             skui::Toggle("深色模式", &theme.dark, "修改后，组件与页面一起更新");
             skui::Toggle("交互动画", &theme.animations);
+            skui::Toggle("触觉反馈", &theme.haptics);
             skui::Divider();
             skui::Space(10);
             skui::Text("强调色");

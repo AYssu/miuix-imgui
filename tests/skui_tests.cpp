@@ -279,8 +279,7 @@ void RouteViewTests() {
         push_in_page=true;h.Frame(draw);CHECK(router.Current()->path=="/detail");
         h.Frame(draw);CHECK(view.IsTransitioning());
         for(int i=0;i<fps/10;++i) h.Frame(draw);
-        float u=2*IM_PI/.24f*.1f;
-        int dim=static_cast<int>(255*.2f*(1-(1+u)*std::exp(-u)));
+        int dim=static_cast<int>(255*.2f*.479383f); // official response=.8, damping=.95 at 20%
         CHECK(HasRouteDim(dim));
         // Interruptions preserve a frozen picture, with one live page callback.
         int before=home_calls+detail_calls;
@@ -320,7 +319,7 @@ void RouteMotionReferenceTests() {
     router.Reset("a");h.Frame(draw);h.Frame(draw);int before=home_headers;
     router.Push("b");h.Frame(draw);
     for(int i=0;i<6;++i) h.Frame(draw);
-    float u=2*IM_PI/.24f*.1f,progress=1-(1+u)*std::exp(-u);
+    float progress=.479383f;
     float dx=std::round(560*(1-progress));
     CHECK(std::abs(MarkerX(IM_COL32(0,255,0,255))-(origin.x+80+dx))<1);
     CHECK(std::abs(MarkerX(IM_COL32(0,255,255,255))-MarkerX(IM_COL32(0,255,0,255)))<1);
@@ -350,7 +349,7 @@ void RouteMotionReferenceTests() {
     CHECK(caught);router.Back();h.Frame(draw);CHECK(!view.IsTransitioning());
     header_back=true;h.Frame(draw);CHECK(router.Current()->path=="a");
     h.Frame(draw);CHECK(view.IsTransitioning());
-    std::puts("PASS Miuix motion: 500ms critical damping, shared header/body movement, 20% covered scrim, leading squircle clip");
+    std::puts("PASS Miuix motion: 500ms normalized spring, shared header/body movement, 20% covered scrim, leading squircle clip");
 }
 void RouteClipIndexTests() {
     for(bool offsets:{false,true}) {
