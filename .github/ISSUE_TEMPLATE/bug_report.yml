@@ -1,0 +1,28 @@
+name: 缺陷反馈
+description: 报告组件、构建或 Android Demo 的可复现问题
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: 提交号、编译器/CMake；Android 问题另附系统/API、ABI、后端与输入法。隐藏设备序列号和私人地址。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤或最小代码
+      description: 写明组件、主题、缩放、动画开关及操作顺序。
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 期望与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图、录屏或脱敏日志
+      description: 只附相关片段，不上传私钥、账号和完整系统日志。

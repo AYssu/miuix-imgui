@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: Host (${{ matrix.cxx }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check repository, documentation and scripts
+        run: |
+          python3 scripts/check-repository.py
+          bash -n scripts/check.sh scripts/build-android.sh
+      - name: Component and navigation regressions
+        run: bash scripts/check.sh host
+      - name: Independent CMake consumer
+        run: bash scripts/check.sh consumer
+
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: bash scripts/check.sh sanitizers
+
+  android:
+    name: Android arm64 compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SKUI_JOBS: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install pinned SDK and NDK
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          echo "SKUI_NDK=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+      - name: Build native gallery and embedded IME helper
+        run: bash scripts/build-android.sh arm64-v8a
+      - name: Compile device regression target
+        run: cmake --build build/arm64-v8a --target skui-ime-tests --parallel 4
+      - name: Validate embedded helper signature and ELF page alignment
+        run: |
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify build/arm64-v8a/generated/ime/skui-ime-helper.apk
+          python3 scripts/check-android-elf.py build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests
