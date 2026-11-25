@@ -106,6 +106,45 @@ struct Gallery {
     float data_scroll=0, data_next_scroll=0, data_row_height=58;
     int data_selected=0;
     std::string data_error;
+    float preview_text_scale=1;
+    bool preview_english=false,preview_enabled=true;
+    bool preview_choices[3]{true,true,true};
+    char preview_name[96]="";
+
+    void Adaptive() {
+        skui::Section("字号与翻译预览");
+        if(skui::BeginCard("adaptive-controls")) {
+            skui::Slider("文字大小",&preview_text_scale,.85f,1.5f,"%.2f×");
+            skui::Toggle("English",&preview_english,"切换较长的界面文案，检查换行与触摸区域");
+            skui::Caption("拖动窗口调整宽度；卡片会自动换列。打开下方输入框可检查键盘避让。");
+        }
+        skui::EndCard();
+        auto local=theme;local.tokens.text_scale=preview_text_scale;
+        skui::ThemeScope scope(local);ImGui::PushFont(nullptr,skui::TextSize(16));
+        int columns=skui::AdaptiveColumns(ImGui::GetContentRegionAvail().x,240,3);
+        char summary[96];std::snprintf(summary,sizeof(summary),"%d 列 · 文字 %.2f× · 宽度 %.0f dp",columns,preview_text_scale,ImGui::GetContentRegionAvail().x/skui::Dp(1));
+        skui::Caption(summary);
+        if(skui::BeginAdaptiveGrid("adaptive-cards",240,3)) {
+            const char *zh[]={"连接与自动同步","通知与专注模式","存储与备份"};
+            const char *en[]={"Connection and automatic synchronization","Notifications and distraction-free focus","Storage management and scheduled backup"};
+            for(int i=0;i<3;++i) {
+                skui::NextAdaptiveCell();ImGui::PushID(i);
+                if(skui::BeginCard("card")) {
+                    skui::Checkbox(preview_english ? en[i] : zh[i],&preview_choices[i]);
+                    skui::Caption(preview_english ? "A longer translated description wraps within the card, while the next action remains reachable." : "这段说明会随卡片宽度自动换行，下一项操作仍能正常点击。");
+                    if(skui::Button(preview_english ? "Open settings" : "打开设置",skui::Tone::Neutral,ImVec2(-1,0))) Message(preview_english ? en[i] : zh[i]);
+                }
+                skui::EndCard();ImGui::PopID();
+            }
+            skui::EndAdaptiveGrid();
+        }
+        if(skui::BeginCard("adaptive-input")) {
+            skui::InputText(preview_english ? "Display name" : "显示名称",preview_name,sizeof(preview_name));
+            skui::SwitchPreference(preview_english ? "Synchronize automatically when a trusted connection becomes available" : "连接到可信网络时自动同步",&preview_enabled,
+                preview_english ? "Background changes are saved after confirmation. This deliberately long translation must grow the row rather than overlap the next item." : "较长的标题与说明会让列表项自然增高，不覆盖后面的控件。");
+        }
+        skui::EndCard();ImGui::PopFont();
+    }
 
     void PollData() {
         if(router.Current()->path!="/runtime") data_loader.Cancel();
@@ -222,8 +261,11 @@ struct Gallery {
         skui::SearchField("component-search",search,sizeof(search));
         if(search[0]) { CatalogueRows(search); return; }
         skui::Section("应用基础");
-        if(skui::BeginCard("application-foundations"))
+        if(skui::BeginCard("application-foundations")) {
             if(skui::ArrowPreference("runtime","任务与长列表","取消、重试、进度、10000 条记录、排序与过滤")) router.Push("/runtime");
+            skui::Divider();
+            if(skui::ArrowPreference("adaptive","自适应与字体","宽度断点、长翻译、字号、键盘避让")) router.Push("/adaptive");
+        }
         skui::EndCard();
         skui::Section("选择组件");
         if(skui::BeginCard("featured-selectors")) {
@@ -573,6 +615,7 @@ struct Gallery {
         if (skui::BeginCard("responsive")) {
             skui::Toggle("宽屏预览", &wide, "切换后，底部导航变为左侧栏");
             skui::Caption("也可拖动窗口右下角调整大小，布局按可用宽度自动切换。");
+            if(skui::ArrowPreference("adaptive","检查自适应与字体","动态字号、长翻译与自动换列")) router.Push("/adaptive");
         }
         skui::EndCard();
     }
@@ -693,13 +736,14 @@ struct Gallery {
         router.Register("/navigation", [this](const skui::Route &) { Navigation(); });
         router.Register("/settings", [this](const skui::Route &) { Settings(); });
         router.Register("/runtime", [this](const skui::Route &) { Runtime(); });
+        router.Register("/adaptive", [this](const skui::Route &) { Adaptive(); });
         router.Register("/detail", [this](const skui::Route &route) { Detail(route); });
         router.Register("/catalogue", [this](const skui::Route &route) { Catalogue(route); });
         router.Register("/component-demo", [this](const skui::Route &route) { ComponentDemo(route); });
         router.Reset("/components");
         initialized = true;
     }
-    void Draw(bool *running, ImVec2 display, float keyboard_height) {
+    void Draw(bool *running, ImVec2 display, float keyboard_height,skui::SafeInsets safe_insets) {
         if (!initialized)
             Initialize();
         PollData();
@@ -720,10 +764,12 @@ struct Gallery {
         bool detail = router.Current()->path == "/detail";
         skui::ShellOptions shell;
         shell.visible_bottom = keyboard_height > 0 ? display.y - keyboard_height : 0;
+        shell.safe_insets=safe_insets;
         shell.title = detail ? "详情" : router.Current()->path == "/settings" ? "设置" : titles[nav];
         if(router.Current()->path=="/catalogue") shell.title="组件目录";
         if(router.Current()->path=="/component-demo") shell.title="组件示例";
         if(router.Current()->path=="/runtime") shell.title="任务与长列表";
+        if(router.Current()->path=="/adaptive") shell.title="自适应与字体";
         shell.subtitle = detail ? "页面参数与返回栈" : subtitles[nav];
         shell.items = items;
         shell.item_count = 4;
@@ -757,9 +803,8 @@ struct Gallery {
                         title=categories[route.parameter[0]-'0'].title;
                 } else if(route.path=="/component-demo") { title="组件示例";subtitle=route.parameter.c_str(); }
                 else if(route.path=="/runtime") {title="任务与长列表";subtitle="后台准备、可取消、按需绘制";}
-                auto start=ImGui::GetCursorScreenPos();
+                else if(route.path=="/adaptive") {title="自适应与字体";subtitle="字号、长翻译、宽度与键盘";}
                 back=skui::TopAppBar("page-header",title,subtitle,router.CanGoBack());
-                ImGui::SetCursorScreenPos(ImVec2(start.x,start.y+skui::Dp(72)));
             });
         }
         if(back) router.Back();
@@ -790,7 +835,7 @@ struct Gallery {
 };
 Gallery app;
 } // namespace
-void Draw(bool *running, ImVec2 display_size, float keyboard_height) { app.Draw(running, display_size, keyboard_height); }
+void Draw(bool *running, ImVec2 display_size, float keyboard_height,skui::SafeInsets safe_insets) { app.Draw(running, display_size, keyboard_height,safe_insets); }
 void Notify(const char *message) { app.Message(message); }
 float FontScale() { return 35.2f; }
 skui::FrameProfiler &Profiler() { return app.profiler; }

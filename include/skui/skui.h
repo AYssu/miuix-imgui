@@ -4,6 +4,7 @@
 #include "skui/router.h"
 #include "skui/theme.h"
 #include "skui/runtime.h"
+#include "skui/layout.h"
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -276,6 +277,10 @@ struct ShellOptions {
     // Physical screen Y of an occluding OS keyboard; zero disables the limit.
     // The previous window position and size are restored when the limit ends.
     float visible_bottom = 0;
+    SafeInsets safe_insets{};
+    // Bounds and insets belong to the host's main viewport; constrain on resize
+    // and rotation as well as first appearance. Disable for unbounded hosts.
+    bool constrain_to_viewport = true;
     // Let RouterView own the page header so title/back also participate in motion.
     bool content_includes_header = false;
     // Optional externally controlled wide-screen rail state. Otherwise stored per shell.

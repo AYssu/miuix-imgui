@@ -5,6 +5,63 @@
 #include <cmath>
 
 namespace skui {
+ViewportBounds ResolveViewport(ImVec2 display,SafeInsets safe,float keyboard_height) {
+    auto positive=[](float value){return std::isfinite(value) ? std::max(0.f,value) : 0.f;};
+    display=ImVec2(positive(display.x),positive(display.y));
+    safe.left=std::min(positive(safe.left),display.x);safe.right=std::min(positive(safe.right),display.x-safe.left);
+    safe.top=std::min(positive(safe.top),display.y);
+    safe.bottom=std::min(std::max(positive(safe.bottom),positive(keyboard_height)),display.y-safe.top);
+    return {ImVec2(safe.left,safe.top),ImVec2(display.x-safe.left-safe.right,display.y-safe.top-safe.bottom)};
+}
+WindowPlacement FitWindow(WindowPlacement window,ViewportBounds viewport,ImVec2 minimum) {
+    for(int axis=0;axis<2;++axis) {
+        float extent=std::isfinite(viewport.size[axis]) ? std::max(0.f,viewport.size[axis]) : 0.f;
+        float origin=std::isfinite(viewport.position[axis]) ? viewport.position[axis] : 0.f;
+        float lower=std::isfinite(minimum[axis]) ? std::clamp(minimum[axis],0.f,extent) : 0.f;
+        float size=std::isfinite(window.size[axis]) ? window.size[axis] : extent;
+        window.size[axis]=std::clamp(size,lower,extent);
+        float position=std::isfinite(window.position[axis]) ? window.position[axis] : origin;
+        window.position[axis]=std::clamp(position,origin,origin+extent-window.size[axis]);
+    }
+    return window;
+}
+WidthClass ClassifyWidth(float width) {
+    return !std::isfinite(width) || width<Dp(600) ? WidthClass::Compact : width<Dp(840) ? WidthClass::Medium : WidthClass::Expanded;
+}
+int AdaptiveColumns(float available,float minimum,int maximum) {
+    if(!std::isfinite(available) || available<=0 || !std::isfinite(minimum) || minimum<=0) return 1;
+    maximum=std::clamp(maximum,1,16);
+    float gap=Dp(GetTheme().tokens.item_spacing.x);
+    float cell=Dp(minimum*std::max(1.f,GetTheme().tokens.text_scale));
+    return static_cast<int>(std::clamp(std::floor((available+gap)/(cell+gap)),1.f,static_cast<float>(maximum)));
+}
+bool BeginAdaptiveGrid(const char *id,float minimum,int maximum) {
+    int columns=AdaptiveColumns(ImGui::GetContentRegionAvail().x,minimum,maximum);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,ImVec2(Dp(GetTheme().tokens.item_spacing.x)*.5f,Dp(GetTheme().tokens.item_spacing.y)*.5f));
+    bool visible=ImGui::BeginTable(id,columns,ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoSavedSettings);
+    ImGui::PopStyleVar();return visible;
+}
+void NextAdaptiveCell() {ImGui::TableNextColumn();}
+void EndAdaptiveGrid() {ImGui::EndTable();}
+float detail::RowTextHeight(const char *title,const char *description,float width,float minimum,float title_size,float description_size) {
+    width=std::max(1.f,width);
+    float height=title ? ImGui::GetFont()->CalcTextSizeA(TextSize(title_size),FLT_MAX,width,title).y : 0;
+    if(description) height+=Dp(8)+ImGui::GetFont()->CalcTextSizeA(TextSize(description_size),FLT_MAX,width,description).y;
+    return std::max(Dp(minimum),height+Dp(24));
+}
+void detail::RowText(ImVec2 min,ImVec2 max,const char *title,const char *description,float left,float right,float title_size,float description_size) {
+    float width=std::max(1.f,max.x-min.x-left-right);
+    float height=title ? ImGui::GetFont()->CalcTextSizeA(TextSize(title_size),FLT_MAX,width,title).y : 0;
+    ImVec2 position(min.x+left,min.y+(description ? Dp(12) : (max.y-min.y-height)*.5f));
+    auto *draw=ImGui::GetWindowDrawList();
+    draw->PushClipRect(min,ImVec2(std::max(min.x,max.x-right),max.y),true);
+    if(title) draw->AddText(ImGui::GetFont(),TextSize(title_size),position,ImGui::GetColorU32(TextColor()),title,nullptr,width);
+    if(description) {
+        position.y+=height+Dp(8);
+        draw->AddText(ImGui::GetFont(),TextSize(description_size),position,ImGui::GetColorU32(MutedColor()),description,nullptr,width);
+    }
+    draw->PopClipRect();
+}
 namespace {
 ImVec2 At(ImVec2 p, float x, float y) { return ImVec2(p.x+x,p.y+y); }
 ImU32 U(ImVec4 color) { return ImGui::GetColorU32(color); }
@@ -17,8 +74,12 @@ struct PreferenceRow {
     PreferenceRow(const char *id,const char *title,const char *description,Icon icon,
                   const char *value,bool reserve_end) {
         min=ImGui::GetCursorScreenPos();
-        float height=Dp(description ? 76 : 52);
-        pressed=ImGui::InvisibleButton(id,ImVec2(ImGui::GetContentRegionAvail().x,height));
+        float available=ImGui::GetContentRegionAvail().x;
+        float left=Dp(icon==Icon::None ? 2 : 38), right=reserve_end ? Dp(46) : Dp(4);
+        float value_width=value ? std::min(available*.38f,ImGui::GetFont()->CalcTextSizeA(TextSize(13),FLT_MAX,0,value).x) : 0;
+        float text_right=right+(value ? value_width+Dp(10) : 0);
+        float height=detail::RowTextHeight(title,description,available-left-text_right,description ? 76 : 52);
+        pressed=ImGui::InvisibleButton(id,ImVec2(available,height),ImGuiButtonFlags_EnableNav);
         detail::AllowScroll(); max=ImGui::GetItemRectMax();
         auto *draw=ImGui::GetWindowDrawList();
         float feedback=detail::InteractionFeedback(.05f,.12f);
@@ -26,20 +87,14 @@ struct PreferenceRow {
             auto color=GetTheme().accent; color.w=feedback;
             draw->AddRectFilled(min,max,U(color),Dp(GetTheme().tokens.row_radius));
         }
-        float left=Dp(icon==Icon::None ? 2 : 38), right=reserve_end ? Dp(46) : Dp(4);
         if(icon!=Icon::None) DrawIcon(icon,At(min,Dp(17),height/2),Dp(22),U(TextColor()));
         if(value) {
-            float width=std::min((max.x-min.x)*.38f,
-                ImGui::GetFont()->CalcTextSizeA(TextSize(13),FLT_MAX,0,value).x);
-            draw->PushClipRect(ImVec2(max.x-right-width,min.y),At(max,0,0),true);
+            float width=value_width;
+            draw->PushClipRect(ImVec2(max.x-right-width,min.y),ImVec2(max.x-right,max.y),true);
             Label(ImVec2(max.x-right-width,min.y+(height-TextSize(13))/2),value,13,MutedColor());
-            draw->PopClipRect(); right+=width+Dp(10);
+            draw->PopClipRect();
         }
-        draw->PushClipRect(min,ImVec2(std::max(min.x,max.x-right),max.y),true);
-        Label(At(min,left,Dp(description ? 12 : 16)),title,16,TextColor());
-        if(description) draw->AddText(ImGui::GetFont(),TextSize(12),At(min,left,Dp(38)),
-            U(MutedColor()),description,nullptr,std::max(Dp(20),max.x-min.x-left-right));
-        draw->PopClipRect();
+        detail::RowText(min,max,title,description,left,text_right);
     }
 };
 void PaintChoice(const PreferenceRow &row,bool selected,bool radio) {
@@ -91,7 +146,8 @@ bool BeginSurface(const char *id,ImVec2 size,float rounding,ImVec4 color) {
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,Dp(rounding < 0 ? GetTheme().tokens.card_radius : std::max(0.f,rounding)));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(Dp(GetTheme().tokens.surface_padding.x),Dp(GetTheme().tokens.surface_padding.y)));
     ImGui::PushStyleColor(ImGuiCol_ChildBg,color.w<0 ? Surface() : color);
-    return ImGui::BeginChild(id,size,(size.y==0 ? ImGuiChildFlags_AutoResizeY : 0) |
+    auto active_input=size.y==0 && detail::ContainsActiveInput(id) ? ImGuiChildFlags_AlwaysAutoResize : 0;
+    return ImGui::BeginChild(id,size,(size.y==0 ? ImGuiChildFlags_AutoResizeY : 0) | active_input |
         ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 }
 void EndSurface() { ImGui::EndChild(); ImGui::PopStyleColor(); ImGui::PopStyleVar(2); }
@@ -151,13 +207,19 @@ void AnchoredBadge(const char *label) {
     }
 }
 bool TopAppBar(const char *id,const char *title,const char *subtitle,bool can_go_back) {
+    if(!title) title="";
     ImGui::PushID(id); ImGui::BeginGroup(); auto p=ImGui::GetCursorScreenPos();
     float width=ImGui::GetContentRegionAvail().x,left=0;
     bool back=false;
     if(can_go_back) { back=IconButton("back",Icon::Back); left=Dp(46); }
-    Label(At(p,left,Dp(4)),title,24,TextColor());
-    if(subtitle) Label(At(p,left,Dp(38)),subtitle,12,MutedColor());
-    ImGui::SetCursorScreenPos(p); ImGui::Dummy(ImVec2(width,Dp(subtitle ? 64 : 44)));
+    float available=std::max(1.f,width-left);
+    float title_height=ImGui::GetFont()->CalcTextSizeA(TextSize(24),FLT_MAX,available,title).y;
+    float subtitle_height=subtitle ? ImGui::GetFont()->CalcTextSizeA(TextSize(12),FLT_MAX,available,subtitle).y : 0;
+    auto *draw=ImGui::GetWindowDrawList();
+    draw->AddText(ImGui::GetFont(),TextSize(24),At(p,left,Dp(4)),U(TextColor()),title,nullptr,available);
+    if(subtitle) draw->AddText(ImGui::GetFont(),TextSize(12),At(p,left,Dp(14)+title_height),U(MutedColor()),subtitle,nullptr,available);
+    float height=std::max(Dp(subtitle ? 64 : 44),title_height+(subtitle ? subtitle_height+Dp(28) : Dp(20)));
+    ImGui::SetCursorScreenPos(p); ImGui::Dummy(ImVec2(width,height));
     ImGui::EndGroup(); ImGui::PopID(); return back;
 }
 bool NavigationBar(const char *id,const NavItem *items,int count,int *selected) {

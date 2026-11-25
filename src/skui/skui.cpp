@@ -62,7 +62,7 @@ struct Row {
     bool pressed, hovered;
     Row(const char *id, float height) {
         min = ImGui::GetCursorScreenPos();
-        pressed = ImGui::InvisibleButton(id, ImVec2(Width(), Dp(height)));
+        pressed = ImGui::InvisibleButton(id, ImVec2(Width(), height),ImGuiButtonFlags_EnableNav);
         AllowScroll();
         max = ImGui::GetItemRectMax();
         hovered = ImGui::IsItemHovered();
@@ -201,6 +201,13 @@ void Reveal(const char *id, float progress, bool inert, const std::function<void
     finish();
 }
 void AllowScroll() { skui::AllowScroll(); }
+bool ContainsActiveInput(const char *child_id) {
+    if(!GImGui->ActiveId || GImGui->InputTextState.ID!=GImGui->ActiveId) return false;
+    auto *parent=ImGui::GetCurrentWindow();auto id=parent->GetID(child_id);
+    for(auto *window=GImGui->ActiveIdWindow;window && window!=parent;window=window->ParentWindow)
+        if(window->ParentWindow==parent && window->ChildId==id) return true;
+    return false;
+}
 bool CanScroll() {
     auto *active = GImGui->ActiveIdWindow;
     bool text = active && GImGui->InputTextState.ID == GImGui->ActiveId;
@@ -422,13 +429,13 @@ void Caption(const char *text) {
 void Heading(const char *text) {
     auto p = ImGui::GetCursorScreenPos();
     Label(ImGui::GetWindowDrawList(), p, text, TextColor(), 28);
-    ImGui::Dummy(ImVec2(0, Dp(38)));
+    ImGui::Dummy(ImVec2(0, std::max(Dp(38),TextSize(28)+Dp(10))));
 }
 void Section(const char *title) {
     Space(9);
     auto p = ImGui::GetCursorScreenPos();
     Label(ImGui::GetWindowDrawList(), Add(p, Dp(4), 0), title, MutedColor(), 13);
-    ImGui::Dummy(ImVec2(0, Dp(22)));
+    ImGui::Dummy(ImVec2(0, std::max(Dp(22),TextSize(13)+Dp(9))));
 }
 void Divider() { ImGui::Separator(); }
 void Space(float h) { ImGui::Dummy(ImVec2(0, Dp(h))); }
@@ -440,8 +447,12 @@ void Collapsible(const char *id, bool expanded, const std::function<void()> &con
 }
 bool BeginCard(const char *id) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Dp(theme.tokens.card_padding.x), Dp(theme.tokens.card_padding.y)));
+    // A keyboard can shrink the parent before it scrolls the focused field
+    // into view. Keep this card measuring for that frame: dropping its contents
+    // would end the host IME session and immediately dismiss the keyboard.
+    auto active_input=detail::ContainsActiveInput(id) ? ImGuiChildFlags_AlwaysAutoResize : 0;
     return ImGui::BeginChild(id, ImVec2(0, 0),
-                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
+                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding | active_input,
                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 }
 void EndCard() {
@@ -496,7 +507,7 @@ void EndScroll() { ImGui::EndChild(); }
 bool Button(const char *label, Tone tone, ImVec2 size) {
     if (ImGui::GetCurrentWindow()->SkipItems) return false;
     if (size.y <= 0)
-        size.y = Dp(44);
+        size.y = std::max(Dp(44),ImGui::GetFontSize()+ImGui::GetStyle().FramePadding.y*2);
     ImVec4 bg = tone == Tone::Primary  ? theme.accent
                 : tone == Tone::Danger ? Colors().danger_surface
                                        : Colors().neutral;
@@ -547,15 +558,13 @@ bool IconButton(const char *id, Icon icon) {
 }
 bool Toggle(const char *label, bool *value, const char *description) {
     ImGui::PushID(label);
-    Row row("##toggle", description ? 66 : 52);
+    Row row("##toggle",detail::RowTextHeight(label,description,Width()-Dp(62),description ? 66 : 52));
     if (row.pressed)
         *value = !*value;
     float a = detail::Animate("##position", *value ? 1.f : 0.f);
     auto *d = ImGui::GetWindowDrawList();
     float cy = (row.min.y + row.max.y) * .5f;
-    Label(d, Add(row.min, 0, Dp(description ? 12 : 15)), label, TextColor());
-    if (description)
-        Label(d, Add(row.min, 0, Dp(36)), description, MutedColor(), 12);
+    detail::RowText(row.min,row.max,label,description,0,Dp(62));
     ImVec2 p(row.max.x - Dp(46), cy - Dp(13));
     ImVec4 off = Colors().toggle_off;
     ImVec4 bg = ImLerp(off, theme.accent, a);
@@ -566,31 +575,31 @@ bool Toggle(const char *label, bool *value, const char *description) {
 }
 bool Checkbox(const char *label, bool *value) {
     ImGui::PushID(label);
-    Row row("##check", 48);
+    Row row("##check",detail::RowTextHeight(label,nullptr,Width()-Dp(36),48));
     if (row.pressed)
         *value = !*value;
     auto *d = ImGui::GetWindowDrawList();
-    ImVec2 c = Add(row.min, Dp(12), Dp(24));
+    ImVec2 c = Add(row.min, Dp(12), (row.max.y-row.min.y)*.5f);
     float a = detail::Animate("selected", *value ? 1.f : 0.f);
     d->AddCircleFilled(c, Dp(11), U(ImLerp(Colors().checkbox_off, theme.accent, a)), 24);
     if (a > 0)
         CheckMark(d, c, U(ImVec4(1, 1, 1, a)), Dp(10) * (.6f + .4f*a));
-    Label(d, Add(row.min, Dp(36), Dp(14)), label, TextColor());
+    detail::RowText(row.min,row.max,label,nullptr,Dp(36));
     ImGui::PopID();
     return row.pressed;
 }
 bool Radio(const char *label, int *value, int option) {
     ImGui::PushID(label);
-    Row row("##radio", 48);
+    Row row("##radio",detail::RowTextHeight(label,nullptr,Width()-Dp(36),48));
     if (row.pressed)
         *value = option;
-    ImVec2 c = Add(row.min, Dp(12), Dp(24));
+    ImVec2 c = Add(row.min, Dp(12), (row.max.y-row.min.y)*.5f);
     auto *d = ImGui::GetWindowDrawList();
     float a = detail::Animate("selected", *value == option ? 1.f : 0.f);
     d->AddCircle(c, Dp(10), U(ImLerp(MutedColor(), theme.accent, a)), 24, Dp(2));
     if (a > 0)
         d->AddCircleFilled(c, Dp(5.5f)*a, U(theme.accent), 24);
-    Label(d, Add(row.min, Dp(36), Dp(14)), label, TextColor());
+    detail::RowText(row.min,row.max,label,nullptr,Dp(36));
     ImGui::PopID();
     return row.pressed;
 }
@@ -651,15 +660,16 @@ bool Combo(const char *label, int *selected, const char *const *items, int count
 }
 bool ListItem(const char *id, const char *title, const char *description, const char *value, bool arrow) {
     ImGui::PushID(id);
-    Row row("##item", description ? 68 : 50);
+    float value_width=value ? std::min(Width()*.38f,ImGui::GetFont()->CalcTextSizeA(TextSize(13),FLT_MAX,0,value).x) : 0;
+    float right=Dp(arrow ? 30 : 0)+(value ? value_width+Dp(10) : 0);
+    Row row("##item",detail::RowTextHeight(title,description,Width()-right,description ? 68 : 50));
     auto *d = ImGui::GetWindowDrawList();
-    Label(d, Add(row.min, 0, Dp(description ? 12 : 15)), title, TextColor());
-    if (description)
-        Label(d, Add(row.min, 0, Dp(37)), description, MutedColor(), 12);
+    detail::RowText(row.min,row.max,title,description,0,right);
     if (value) {
-        auto size = ImGui::GetFont()->CalcTextSizeA(TextSize(13), FLT_MAX, 0, value);
-        Label(d, ImVec2(row.max.x - size.x - Dp(arrow ? 26 : 0), (row.min.y + row.max.y - TextSize(13)) * .5f),
+        d->PushClipRect(ImVec2(row.max.x-value_width-Dp(arrow ? 26 : 0),row.min.y),ImVec2(row.max.x-Dp(arrow ? 26 : 0),row.max.y),true);
+        Label(d, ImVec2(row.max.x - value_width - Dp(arrow ? 26 : 0), (row.min.y + row.max.y - TextSize(13)) * .5f),
               value, MutedColor(), 13);
+        d->PopClipRect();
     }
     if (arrow)
         DrawIcon(Icon::Chevron, ImVec2(row.max.x - Dp(8), (row.min.y + row.max.y) * .5f), Dp(20),
@@ -757,41 +767,62 @@ bool BeginShell(const ShellOptions &o) {
         *o.back_requested = false;
     if (o.close_requested)
         *o.close_requested = false;
-    ImGui::SetNextWindowPos(o.initial_position, ImGuiCond_FirstUseEver);
-    // Move before Begin: the background, clip rectangles and children must all
-    // use the new position, rather than a mix of old and new coordinates.
-    if (auto *previous = ImGui::FindWindowByName(o.id)) {
-        if (GImGui->ActiveId == previous->GetID("##drag") && ImGui::IsMouseDragging(0))
-            ImGui::SetNextWindowPos(Add(previous->Pos, ImGui::GetIO().MouseDelta.x,
-                                       ImGui::GetIO().MouseDelta.y));
+    auto *previous=ImGui::FindWindowByName(o.id);
+    WindowPlacement placement{previous ? previous->Pos : o.initial_position,previous ? previous->Size : o.initial_size};
+    // Resolve all geometry before Begin, so background, children and hit boxes
+    // use the same bounds on the first keyboard/rotation frame.
+    if(previous && GImGui->ActiveId==previous->GetID("##drag") && ImGui::IsMouseDragging(0))
+        placement.position=Add(placement.position,ImGui::GetIO().MouseDelta.x,ImGui::GetIO().MouseDelta.y);
+    auto *viewport=ImGui::GetMainViewport();
+    auto bounds=ResolveViewport(viewport->Size,o.safe_insets);
+    bounds.position=Add(bounds.position,viewport->Pos.x,viewport->Pos.y);
+    ImVec2 minimum(Dp(330),Dp(420));
+    auto initial_unlimited=placement;
+    if(previous) {
+        auto &saved=previous->StateStorage;
+        auto limited=previous->GetID("##ime-limited");
+        auto x=previous->GetID("##ime-x"),y=previous->GetID("##ime-y");
+        auto width=previous->GetID("##ime-width"),height=previous->GetID("##ime-height");
+        bool was_limited=saved.GetBool(limited);
+        if(o.visible_bottom>0 && std::isfinite(o.visible_bottom)) {
+            if(!was_limited) {
+                saved.SetFloat(x,placement.position.x);saved.SetFloat(y,placement.position.y);
+                saved.SetFloat(width,placement.size.x);saved.SetFloat(height,placement.size.y);
+            }
+        } else if(was_limited) {
+            placement={ImVec2(saved.GetFloat(x),saved.GetFloat(y)),ImVec2(saved.GetFloat(width),saved.GetFloat(height))};
+        }
+        saved.SetBool(limited,o.visible_bottom>0 && std::isfinite(o.visible_bottom));
     }
-    ImGui::SetNextWindowSize(o.initial_size, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(Dp(330), Dp(420)), ImVec2(FLT_MAX, FLT_MAX));
+    bool keyboard=o.visible_bottom>0 && std::isfinite(o.visible_bottom);
+    if(keyboard) {
+        bounds.size.y=std::max(0.f,std::min(bounds.position.y+bounds.size.y,o.visible_bottom-Dp(8))-bounds.position.y);
+        placement.position.y=std::clamp(placement.position.y,bounds.position.y,
+            bounds.position.y+std::max(0.f,bounds.size.y-minimum.y));
+        placement.size.y=std::min(placement.size.y,bounds.position.y+bounds.size.y-placement.position.y);
+    }
+    if(o.constrain_to_viewport || keyboard) {
+        placement=FitWindow(placement,bounds,minimum);
+        minimum=ImVec2(std::min(minimum.x,bounds.size.x),std::min(minimum.y,bounds.size.y));
+    }
+    if(!previous || placement.position.x!=previous->Pos.x || placement.position.y!=previous->Pos.y)
+        ImGui::SetNextWindowPos(placement.position);
+    if(!previous || placement.size.x!=previous->Size.x || placement.size.y!=previous->Size.y)
+        ImGui::SetNextWindowSize(placement.size);
+    auto maximum=o.constrain_to_viewport || keyboard ? bounds.size : ImVec2(FLT_MAX,FLT_MAX);
+    ImGui::SetNextWindowSizeConstraints(minimum,maximum);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     bool visible = ImGui::Begin(o.id, nullptr,
                                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
                                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     auto *storage = ImGui::GetStateStorage();
-    auto limited_id = ImGui::GetID("##ime-limited");
-    bool was_limited = storage->GetBool(limited_id);
-    auto save_x = ImGui::GetID("##ime-x"), save_y = ImGui::GetID("##ime-y");
-    auto save_h = ImGui::GetID("##ime-height");
-    if (o.visible_bottom > 0) {
-        if (!was_limited) {
-            storage->SetFloat(save_x, ImGui::GetWindowPos().x);
-            storage->SetFloat(save_y, ImGui::GetWindowPos().y);
-            storage->SetFloat(save_h, ImGui::GetWindowHeight());
-        }
-        auto position = ImGui::GetWindowPos();
-        position.y = std::max(Dp(8), std::min(position.y, o.visible_bottom - Dp(428)));
-        ImGui::SetWindowPos(position);
-        ImGui::SetWindowSize(ImVec2(ImGui::GetWindowWidth(),
-            std::min(storage->GetFloat(save_h), o.visible_bottom - position.y - Dp(8))));
-    } else if (was_limited) {
-        ImGui::SetWindowPos(ImVec2(storage->GetFloat(save_x), storage->GetFloat(save_y)));
-        ImGui::SetWindowSize(ImVec2(ImGui::GetWindowWidth(), storage->GetFloat(save_h)));
+    if(!previous && keyboard) {
+        storage->SetBool(ImGui::GetID("##ime-limited"),true);
+        storage->SetFloat(ImGui::GetID("##ime-x"),initial_unlimited.position.x);
+        storage->SetFloat(ImGui::GetID("##ime-y"),initial_unlimited.position.y);
+        storage->SetFloat(ImGui::GetID("##ime-width"),initial_unlimited.size.x);
+        storage->SetFloat(ImGui::GetID("##ime-height"),initial_unlimited.size.y);
     }
-    storage->SetBool(limited_id, o.visible_bottom > 0);
     auto pos = ImGui::GetWindowPos();
     auto size = ImGui::GetWindowSize();
     auto *d = ImGui::GetWindowDrawList();

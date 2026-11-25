@@ -50,9 +50,10 @@ ImGui::Render();
 ```
 
 组件及主题在渲染线程调用。多上下文切换后重新应用主题。
-`Theme::scale` 缩放逻辑尺寸，宿主同时配置字体大小或 `FontGlobalScale`；
+`Theme::scale` 缩放逻辑尺寸，宿主同时通过 `PushFont` / 字体倍率配置所需字号；
 使用 `ImVec2` 屏幕坐标的接口按头文件注释传入实际像素。
 `ShellOptions::initial_position/initial_size` 和悬浮操作位置均为实际屏幕像素。
+安全区域、自动换列、长翻译与字体资源约定见 [自适应布局与字体](layout-and-fonts.md)。
 
 标签/ID 应在组件存活期间稳定，同名组件通过 `PushID/PopID` 或 `##suffix` 区分。
 不要每帧改变 ID，也不要用临时局部变量重置选中项、侧栏状态或 Router。
@@ -65,6 +66,7 @@ ImGui::Render();
 | BeginCard / BeginSurface / BeginScroll / BeginShell | 无论返回 true/false，均调用对应 End |
 | BeginRefreshScroll | 无论返回 true/false，均调用 EndScroll；`refreshing` 和请求处理由宿主负责 |
 | BeginDialog / BeginBottomSheet | 仅返回 true 时调用 EndDialog / EndBottomSheet |
+| BeginAdaptiveGrid | 仅返回 true 时逐个调用 NextAdaptiveCell，最后 EndAdaptiveGrid |
 
 这些规则以 [公开头文件](../include/skui/skui.h) 的注释为准。
 Overlay 是同一 ImGui Surface 内的弹层，不是独立 Android Window。

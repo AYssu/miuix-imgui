@@ -40,4 +40,31 @@ int main() {
             std::chrono::duration<double,std::micro>(Clock::now()-start).count()/100000);
     }
     ImGui::DestroyContext();
+
+    ImGui::CreateContext();
+    auto &list_io=ImGui::GetIO();list_io.IniFilename=nullptr;list_io.DisplaySize=ImVec2(800,1200);list_io.DeltaTime=1.f/60;
+    list_io.BackendFlags|=ImGuiBackendFlags_RendererHasTextures | ImGuiBackendFlags_RendererHasVtxOffset;
+    ImGui::GetPlatformIO().Renderer_TextureMaxWidth=4096;ImGui::GetPlatformIO().Renderer_TextureMaxHeight=4096;
+    list_io.Fonts->AddFontDefault();theme.animations=false;frames.clear();int drawn=0;
+    for(int frame=0;frame<3100;++frame) {
+        auto start=Clock::now();skui::ApplyTheme(theme);ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0,0));ImGui::SetNextWindowSize(ImVec2(600,1000));ImGui::Begin("list-benchmark");
+        drawn=0;skui::BeginScroll("records");ImGuiListClipper clipper;
+        clipper.Begin(100000,skui::Dp(50)+ImGui::GetStyle().ItemSpacing.y);
+        while(clipper.Step()) for(int i=clipper.DisplayStart;i<clipper.DisplayEnd;++i) {
+            char title[64];std::snprintf(title,sizeof(title),"Record %05d",i+1);ImGui::PushID(i+1);
+            skui::ListItem("record",title,nullptr,i==0 ? "Selected" : nullptr,false);ImGui::PopID();++drawn;
+        }
+        skui::EndScroll();ImGui::End();ImGui::Render();auto end=Clock::now();
+        if(frame>=100) frames.push_back(std::chrono::duration<double,std::micro>(end-start).count());
+        // Simulated renderer acknowledgements; no GPU upload is included.
+        for(auto *texture:list_io.Fonts->TexList) {
+            if(texture->Status==ImTextureStatus_WantCreate) texture->SetTexID(texture->UniqueID+1);
+            if(texture->Status==ImTextureStatus_WantCreate || texture->Status==ImTextureStatus_WantUpdates) texture->SetStatus(ImTextureStatus_OK);
+            if(texture->Status==ImTextureStatus_WantDestroy) {texture->SetTexID(ImTextureID_Invalid);texture->SetStatus(ImTextureStatus_Destroyed);}
+        }
+    }
+    std::printf("100000 fixed-height records; visible submitted=%d\n",drawn);print("List UI frame",frames);
+    for(auto *texture:list_io.Fonts->TexList) {texture->SetTexID(ImTextureID_Invalid);texture->SetStatus(ImTextureStatus_Destroyed);}
+    ImGui::DestroyContext();
 }
