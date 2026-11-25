@@ -21,7 +21,7 @@ else()
 endif()
 
 add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp
-    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp)
+    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp src/skui/runtime.cpp)
 add_library(skui::ui ALIAS skui-ui)
 target_include_directories(skui-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(skui-ui PUBLIC ${SKUI_IMGUI})
@@ -36,6 +36,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
     if(NOT ANDROID)
         message(FATAL_ERROR "Use the Android NDK CMake toolchain for the Android demo")
     endif()
+    find_package(Threads REQUIRED)
     find_package(Java REQUIRED COMPONENTS Development)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(SKUI_ANDROID_SDK "$ENV{ANDROID_SDK_ROOT}" CACHE PATH "Android SDK for the embedded system IME bridge")
@@ -81,7 +82,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         target_link_libraries(skui-imgui PUBLIC freetype z)
     endif()
     add_executable(sk-imgui-ui
-        src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp
+        src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp examples/gallery/data_model.cpp
         src/Android_touch/TouchHelperA.cpp
         src/Android_Graphics/GraphicsManager.cpp src/Android_Graphics/OpenGLGraphics.cpp
         src/Android_Graphics/VulkanGraphics.cpp src/Android_Graphics/vulkan_wrapper.cpp
@@ -89,6 +90,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         src/Android_my_imgui/my_imgui_impl_android.cpp
         src/Android_my_imgui/AndroidIme.cpp src/Android_my_imgui/AndroidImeApk.cpp
         src/Android_my_imgui/AndroidHaptics.cpp
+        src/Android_my_imgui/FrameWake.cpp
         "${skui_ime_generated}/skui_ime_dex.h"
         src/ImGui/backends/imgui_impl_opengl3.cpp src/ImGui/backends/imgui_impl_vulkan.cpp
         src/My_Utils/stb_image/stb_image.cpp)
@@ -98,7 +100,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         include/Android_my_imgui include/Android_touch include/My_Utils
         include/My_Utils/stb_image include/ImGui/backends include/ImGui/misc/freetype)
     target_compile_definitions(sk-imgui-ui PRIVATE VK_USE_PLATFORM_ANDROID_KHR IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
-    target_link_libraries(sk-imgui-ui PRIVATE skui::ui skui::navigation log android EGL GLESv3 z)
+    target_link_libraries(sk-imgui-ui PRIVATE skui::ui skui::navigation Threads::Threads log android EGL GLESv3 z)
     target_link_options(sk-imgui-ui PRIVATE "-Wl,-z,max-page-size=16384")
     # Explicit device regression target; excluded from the shipping build.
     add_executable(skui-ime-tests EXCLUDE_FROM_ALL tests/android_ime_tests.cpp
@@ -116,6 +118,7 @@ if(SKUI_BUILD_BENCHMARKS)
 endif()
 
 if(SKUI_BUILD_TESTS)
+    find_package(Threads REQUIRED)
     enable_testing()
     add_executable(skui-tests tests/skui_tests.cpp)
     target_link_libraries(skui-tests PRIVATE skui::ui skui::navigation)
@@ -130,4 +133,13 @@ if(SKUI_BUILD_TESTS)
         target_include_directories(skui-foundation-tests PRIVATE examples/gallery)
     endif()
     add_test(NAME skui-foundation-tests COMMAND skui-foundation-tests)
+    add_executable(skui-runtime-tests tests/runtime_tests.cpp examples/gallery/data_model.cpp)
+    target_include_directories(skui-runtime-tests PRIVATE examples/gallery)
+    target_link_libraries(skui-runtime-tests PRIVATE skui::ui Threads::Threads)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_sources(skui-runtime-tests PRIVATE src/Android_my_imgui/FrameWake.cpp)
+        target_include_directories(skui-runtime-tests PRIVATE include/Android_my_imgui)
+        target_compile_definitions(skui-runtime-tests PRIVATE SKUI_TEST_NATIVE_WAKE)
+    endif()
+    add_test(NAME skui-runtime-tests COMMAND skui-runtime-tests)
 endif()

@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "skui/router.h"
 #include "skui/theme.h"
+#include "skui/runtime.h"
 #include <cstddef>
 #include <functional>
 #include <memory>

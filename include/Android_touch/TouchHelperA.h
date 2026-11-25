@@ -30,6 +30,8 @@ namespace Touch {
     void Close();
     // Drain physical input into ImGui on the rendering thread before NewFrame.
     void Poll();
+    // Configure only while readers are stopped. Callback/user outlive Init/Close.
+    void SetWakeHandler(void (*handler)(void *),void *user=nullptr);
     void SetCaptureRegion(float x, float y, float width, float height);
 
     void Down(float x, float y);

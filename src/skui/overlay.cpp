@@ -41,6 +41,7 @@ void CloseOverlay() {
         state.SetBool(closing, true);
         state.SetFloat(elapsed_key, 0);
         state.SetFloat(exit_from, state.GetFloat(opacity, 1));
+        RequestAnimationFrame();
     }
 }
 
@@ -62,6 +63,7 @@ bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags) {
     float elapsed = state.GetFloat(elapsed_key)+(window->Appearing ? 0.f : ImGui::GetIO().DeltaTime);
     state.SetFloat(elapsed_key,elapsed);
     float t = GetTheme().animations ? std::clamp(elapsed/(duration*GetTheme().motion_duration_scale), 0.f, 1.f) : 1.f;
+    if (t<1) RequestAnimationFrame();
     if (exit && t >= 1) {
         // Begin already emitted an opaque window background. Exclude this
         // terminal frame from rendering instead of flashing that background.

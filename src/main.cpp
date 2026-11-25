@@ -17,6 +17,9 @@ void RequestStop(int) { stop_requested = 1; }
 #include "GraphicsManager.h" //获取 当前渲染模式
 #include "draw.h"            //绘制套
 #include "gallery.h"
+#include "FrameWake.h"
+#include <algorithm>
+#include <chrono>
 
 int main(int argc, char *argv[]) {
     if (argc > 1 && std::strcmp(argv[1], "--ime-host") == 0)
@@ -31,9 +34,11 @@ int main(int argc, char *argv[]) {
         return android::ANativeWindowCreator::SelfCheck() ? 0 : 1;
     }
     const char *settings_path=nullptr;
+    bool continuous_rendering=false;
     for (int i=1; i<argc; ++i) {
         if (std::strcmp(argv[i],"--settings")==0 && i+1<argc && argv[i+1][0]) settings_path=argv[++i];
-        else {fprintf(stderr,"Usage: sk-imgui-ui [--settings <path>]\n"); return 1;}
+        else if(std::strcmp(argv[i],"--continuous")==0) continuous_rendering=true;
+        else {fprintf(stderr,"Usage: sk-imgui-ui [--settings <path>] [--continuous]\n"); return 1;}
     }
 
     // The lock is scoped to this executable path and released by the kernel on
@@ -87,6 +92,9 @@ int main(int argc, char *argv[]) {
         return 4;
     }
 
+    FrameWake wake;
+    Touch::SetWakeHandler(FrameWake::Notify,&wake);
+    gallery::SetWakeHandler(FrameWake::Notify,&wake);
     if (!Touch::Init({(float)::abs_ScreenX, (float)::abs_ScreenY}, false)) { // 最后一个参数改成true 只监听
         __android_log_print(ANDROID_LOG_WARN, "Surface",
                             "[!] Touch input is unavailable; the window is read-only");
@@ -99,7 +107,11 @@ int main(int argc, char *argv[]) {
     AndroidHaptics::Init();
     static bool flag = true;
     auto &profiler=gallery::Profiler();
+    using Clock=std::chrono::steady_clock;
+    auto active_until=Clock::now()+std::chrono::milliseconds(250);
     while (flag && !stop_requested) {
+        auto frame_start=Clock::now();
+        if(wake.Drain()) active_until=frame_start+std::chrono::milliseconds(250);
         profiler.BeginFrame();
         drawBegin();
         Touch::Poll();
@@ -115,12 +127,20 @@ int main(int argc, char *argv[]) {
         graphics->EndFrame();
         profiler.EndFrame();
         gallery::FlushPreferences();
+        auto request=skui::CurrentFrameRequest();
+        bool active=request.continuous || ImGui::GetIO().WantTextInput || ImGui::IsAnyMouseDown() || Clock::now()<active_until;
+        if(!continuous_rendering && !active && flag && !stop_requested) {
+            double elapsed=std::chrono::duration<double>(Clock::now()-frame_start).count();
+            wake.Wait(std::max(0.0,std::min(.1-elapsed,request.wake_after_seconds-elapsed)),AndroidIme::ActivityFd());
+        }
     }
 
     gallery::FlushPreferences(true);
+    gallery::Shutdown();
     AndroidIme::Shutdown();
     AndroidHaptics::Shutdown();
     Touch::Close();
+    Touch::SetWakeHandler(nullptr);
     graphics->Shutdown();
     android::ANativeWindowCreator::Destroy(::window);
     close(lock_fd);

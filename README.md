@@ -78,6 +78,7 @@ target_link_libraries(your-app PRIVATE skui::ui skui::navigation)
 | [测试规范](docs/testing.md) | 主机、Sanitizer、接入测试、真机验证与清理 |
 | [基础能力路线图](docs/roadmap.md) | 同类项目参考、当前差距、实施顺序与验收标准 |
 | [主题、设置与性能](docs/foundations.md) | 设计参数、局部主题、可选设置保存、固定容量性能采样 |
+| [调度、任务与长列表](docs/runtime.md) | 闲置唤醒、可取消加载、稳定 ID / 滚动锚点、可见行裁剪 |
 | [CI 工作流](.github/workflows/ci.yml) | GCC/Clang、ASan/UBSan、独立接入及 Android 构建 |
 
 ```text

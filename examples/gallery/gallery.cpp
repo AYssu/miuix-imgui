@@ -1,5 +1,7 @@
 #include "gallery.h"
 #include "preferences.h"
+#include "data_model.h"
+#include "imgui_internal.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -96,6 +98,73 @@ struct Gallery {
     std::string preferences_path;
     Preferences saved;
     bool save_requested = false, auto_save = false;
+    DataLoader data_loader;
+    std::vector<DataRow> data_rows;
+    DataView data_view;
+    char data_query[96]="";
+    bool data_descending=false, data_fail=false, data_scroll_pending=false;
+    float data_scroll=0, data_next_scroll=0, data_row_height=58;
+    int data_selected=0;
+    std::string data_error;
+
+    void PollData() {
+        if(router.Current()->path!="/runtime") data_loader.Cancel();
+        DataResult result;
+        if(!data_loader.TakeResult(result)) return;
+        data_error=std::move(result.error);
+        if(data_error.empty()) {
+            auto anchor=data_view.Anchor(data_rows,data_scroll,data_row_height);
+            data_rows=std::move(result.rows);
+            data_view.Rebuild(data_rows,data_query,data_descending);
+            data_next_scroll=data_view.Restore(data_rows,anchor,data_row_height);data_scroll_pending=true;
+            if(data_selected>static_cast<int>(data_rows.size())) data_selected=0;
+        }
+        skui::RequestAnimationFrame();
+    }
+    void Runtime() {
+        skui::Section("后台加载");
+        if(skui::BeginCard("data-task")) {
+            skui::Caption("后台准备数据，界面继续响应；离开此页会取消未完成的请求。");
+            skui::Toggle("模拟加载失败",&data_fail,"关闭后重试，可恢复正常加载");
+            auto status=data_loader.Status();
+            if(status.state==LoadState::Loading) {
+                skui::Progress(status.progress,"正在准备记录");
+                if(skui::Button("取消加载",skui::Tone::Neutral)) data_loader.Cancel();
+            } else {
+                if(skui::Button(status.state==LoadState::Failed ? "重试加载" : "加载 10000 条记录")) {
+                    data_error.clear();data_loader.Start(10000,data_fail);
+                }
+                if(status.state==LoadState::Cancelled) skui::Caption("加载已取消，已有记录继续保留。");
+            }
+            if(!data_error.empty()) skui::Caption(data_error.c_str());
+        }
+        skui::EndCard();
+        skui::Section("长列表与稳定选择");
+        auto anchor=data_view.Anchor(data_rows,data_scroll,data_row_height);
+        bool changed=skui::SearchField("data-search",data_query,sizeof(data_query));
+        changed=skui::Toggle("按编号倒序",&data_descending,"过滤和排序时保留选中记录及可见锚点") || changed;
+        data_row_height=skui::Dp(50)+ImGui::GetStyle().ItemSpacing.y;
+        if(changed) {
+            data_view.Rebuild(data_rows,data_query,data_descending);
+            data_next_scroll=data_view.Restore(data_rows,anchor,data_row_height);data_scroll_pending=true;
+        }
+        const auto &indices=data_view.Indices();
+        if(data_scroll_pending) {ImGui::SetNextWindowScroll(ImVec2(0,data_next_scroll));data_scroll_pending=false;}
+        ImGui::SetNextWindowContentSize(ImVec2(0,std::max(0.f,indices.size()*data_row_height-ImGui::GetStyle().ItemSpacing.y)));
+        int drawn=0;
+        if(skui::BeginScroll("records",ImVec2(0,skui::Dp(300)))) {
+            ImGuiListClipper clipper;clipper.Begin(static_cast<int>(indices.size()),data_row_height);
+            while(clipper.Step()) for(int i=clipper.DisplayStart;i<clipper.DisplayEnd;++i) {
+                const auto &row=data_rows[indices[i]];
+                ImGui::PushID(row.id);
+                if(skui::ListItem("record",row.title.c_str(),nullptr,row.id==data_selected ? "已选择" : nullptr,false)) data_selected=row.id;
+                ImGui::PopID();++drawn;
+            }
+        }
+        data_scroll=ImGui::GetScrollY();skui::EndScroll();
+        char summary[128];std::snprintf(summary,sizeof(summary),"匹配 %zu 条 · 本帧绘制 %d 条 · 选择 #%d",indices.size(),drawn,data_selected);
+        skui::Caption(summary);
+    }
 
     Preferences CapturePreferences() const {
         Preferences p=saved;
@@ -152,6 +221,10 @@ struct Gallery {
     void Components() {
         skui::SearchField("component-search",search,sizeof(search));
         if(search[0]) { CatalogueRows(search); return; }
+        skui::Section("应用基础");
+        if(skui::BeginCard("application-foundations"))
+            if(skui::ArrowPreference("runtime","任务与长列表","取消、重试、进度、10000 条记录、排序与过滤")) router.Push("/runtime");
+        skui::EndCard();
         skui::Section("选择组件");
         if(skui::BeginCard("featured-selectors")) {
             if(skui::ArrowPreference("dropdown","DropdownPreference","整行打开浮动单选，展示短列表与长列表"))
@@ -227,6 +300,7 @@ struct Gallery {
                 for(int i=0;i<20;++i) {char line[40];std::snprintf(line,sizeof(line),"内容 %02d",i+1);skui::ListItem(line,line,nullptr,nullptr,false);}
                 skui::EndScroll();
             } else if(component=="Glass") {
+                if(theme.animations) skui::RequestAnimationFrame();
                 skui::Slider("模糊",&glass_style.blur,0,24);skui::Slider("折射",&glass_style.refraction,0,12);
                 skui::Slider("色调强度",&glass_style.tint.w,0,.6f,"%.2f");
                 skui::Caption("模糊与折射为 0 时背景清晰；色调强度控制白色蒙层。");
@@ -234,7 +308,7 @@ struct Gallery {
                 auto *d=ImGui::GetWindowDrawList();
                 d->AddRectFilled(p,ImVec2(p.x+w,p.y+h),ImGui::GetColorU32(ImVec4(.15f,.2f,.38f,1)),skui::Dp(24));
                 for(int i=0;i<9;++i) {
-                    float phase=static_cast<float>(ImGui::GetTime()*.4+i);
+                    float phase=static_cast<float>((theme.animations ? ImGui::GetTime()*.4 : 0)+i);
                     d->AddCircleFilled(ImVec2(p.x+w*(.12f+.095f*i),p.y+h*(.5f+.23f*std::sin(phase))),skui::Dp(30),
                         ImGui::GetColorU32(ImVec4(.3f+.06f*i,.65f,.95f-.08f*i,1)),32);
                 }
@@ -618,6 +692,7 @@ struct Gallery {
         router.Register("/layouts", [this](const skui::Route &) { Layouts(); });
         router.Register("/navigation", [this](const skui::Route &) { Navigation(); });
         router.Register("/settings", [this](const skui::Route &) { Settings(); });
+        router.Register("/runtime", [this](const skui::Route &) { Runtime(); });
         router.Register("/detail", [this](const skui::Route &route) { Detail(route); });
         router.Register("/catalogue", [this](const skui::Route &route) { Catalogue(route); });
         router.Register("/component-demo", [this](const skui::Route &route) { ComponentDemo(route); });
@@ -627,6 +702,7 @@ struct Gallery {
     void Draw(bool *running, ImVec2 display, float keyboard_height) {
         if (!initialized)
             Initialize();
+        PollData();
         scale = std::clamp(std::min(display.x, display.y) / 490.f, 1.f, 2.6f) * (wide ? .57f : 1.f);
         theme.scale = scale;
         skui::ApplyTheme(theme);
@@ -647,6 +723,7 @@ struct Gallery {
         shell.title = detail ? "详情" : router.Current()->path == "/settings" ? "设置" : titles[nav];
         if(router.Current()->path=="/catalogue") shell.title="组件目录";
         if(router.Current()->path=="/component-demo") shell.title="组件示例";
+        if(router.Current()->path=="/runtime") shell.title="任务与长列表";
         shell.subtitle = detail ? "页面参数与返回栈" : subtitles[nav];
         shell.items = items;
         shell.item_count = 4;
@@ -679,6 +756,7 @@ struct Gallery {
                     if(route.parameter.size()==1 && route.parameter[0]>='0' && route.parameter[0]<='6')
                         title=categories[route.parameter[0]-'0'].title;
                 } else if(route.path=="/component-demo") { title="组件示例";subtitle=route.parameter.c_str(); }
+                else if(route.path=="/runtime") {title="任务与长列表";subtitle="后台准备、可取消、按需绘制";}
                 auto start=ImGui::GetCursorScreenPos();
                 back=skui::TopAppBar("page-header",title,subtitle,router.CanGoBack());
                 ImGui::SetCursorScreenPos(ImVec2(start.x,start.y+skui::Dp(72)));
@@ -686,6 +764,7 @@ struct Gallery {
         }
         if(back) router.Back();
         if (progress_running) {
+            if(router.Current()->path=="/component-demo") skui::RequestAnimationFrame();
             progress = std::min(1.f, progress + ImGui::GetIO().DeltaTime * .12f);
             if (progress >= 1) {
                 progress_running = false;
@@ -717,4 +796,6 @@ float FontScale() { return 35.2f; }
 skui::FrameProfiler &Profiler() { return app.profiler; }
 void ConfigurePreferences(const char *path) { app.ConfigurePreferences(path); }
 void FlushPreferences(bool exiting) { app.FlushPreferences(exiting); }
+void SetWakeHandler(void (*handler)(void *),void *user) {app.data_loader.SetWakeHandler(handler,user);}
+void Shutdown() {app.data_loader.Shutdown();app.data_loader.SetWakeHandler(nullptr);}
 } // namespace gallery

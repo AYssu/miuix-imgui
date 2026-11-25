@@ -46,7 +46,9 @@ namespace Touch {
     static std::atomic<bool> initialized{false};
     static std::vector<pthread_t> readerThreads;
     struct InputSample { My_Vector2 position; bool down; };
-    static std::vector<InputSample> pendingInput;
+    static std::vector<InputSample> pendingInput, drainedInput;
+    static void (*wakeHandler)(void *)=nullptr;
+    static void *wakeUser=nullptr;
     static float captureX = 0, captureY = 0, captureWidth = 0, captureHeight = 0;
 
     static bool readOnly = false;
@@ -201,6 +203,7 @@ namespace Touch {
             }
             size_t count = size_t(readSize) / sizeof(input_event);
 
+            bool wake=false;
             lock.lock();
             for (size_t j = 0; j < count; j++) {
                 input_event &ie = inputEvent[j];
@@ -240,8 +243,11 @@ namespace Touch {
                     }
                     // Gestures outside the gallery belong to Android, including the system IME.
                     // Feeding them to ImGui would clear the active text field on every key tap.
-                    if ((readOnly || finger.captured) && pendingInput.size() < 1024)
-                        pendingInput.push_back({position, finger.isDown});
+                    if (readOnly || finger.captured) {
+                        wake=wake || pendingInput.empty();
+                        if(pendingInput.size()<1024) pendingInput.push_back({position,finger.isDown});
+                        else pendingInput.back()={position,finger.isDown}; // Never drop the final release.
+                    }
 
                     if (!readOnly) {
                         if (callback) {
@@ -254,6 +260,7 @@ namespace Touch {
                 }
             }
             lock.unlock();
+            if(wake && wakeHandler) wakeHandler(wakeUser);
 
         }
         return nullptr;
@@ -487,6 +494,7 @@ namespace Touch {
         for (auto thread : readerThreads) pthread_join(thread, nullptr);
         readerThreads.clear();
         pendingInput.clear();
+        drainedInput.clear();
         for (auto &device: devices) {
             if (!readOnly)
                 ioctl(device.fd, EVIOCGRAB, UNGRAB);
@@ -510,17 +518,21 @@ namespace Touch {
     }
 
     void Poll() {
-        std::vector<InputSample> samples;
+        drainedInput.clear();
         lock.lock();
-        samples.swap(pendingInput);
+        drainedInput.swap(pendingInput);
         lock.unlock();
         if (!ImGui::GetCurrentContext()) return;
         auto& io = ImGui::GetIO();
-        for (const auto& sample : samples) {
+        for (const auto& sample : drainedInput) {
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(sample.position.x, sample.position.y);
             io.AddMouseButtonEvent(0, sample.down);
         }
+    }
+    void SetWakeHandler(void (*handler)(void *),void *user) {
+        IM_ASSERT(readerThreads.empty());
+        wakeHandler=handler;wakeUser=user;
     }
 
     void Down(float x, float y) {

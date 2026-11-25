@@ -310,6 +310,7 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
         if(s.elapsed+1e-6f>=duration) s.Stop();
     }
     float t=s.moving ? std::clamp(s.elapsed/duration,0.f,1.f) : 1.f;
+    if(s.moving) RequestAnimationFrame();
     float progress=s.moving ? (s.direction==Router::Navigation::Reset ? 1-std::pow(1-t,3) : PageProgress(s.elapsed)) : 1;
     float width=size.x;
     float incoming_dx=s.direction==Router::Navigation::Back ? -width*.25f*(1-progress) :

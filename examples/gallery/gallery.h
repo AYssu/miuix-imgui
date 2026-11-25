@@ -13,4 +13,8 @@ skui::FrameProfiler &Profiler();
 // outside the UI/render frame, on explicit save or shutdown only.
 void ConfigurePreferences(const char *path);
 void FlushPreferences(bool exiting = false);
+// Configure before starting a task. Shutdown joins producers before the host
+// destroys wake/input/render resources; it never owns the host's wake source.
+void SetWakeHandler(void (*handler)(void *),void *user=nullptr);
+void Shutdown();
 } // namespace gallery

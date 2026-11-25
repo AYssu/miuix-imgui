@@ -5,6 +5,8 @@ namespace AndroidIme {
 void Init();
 void Poll();
 void EndFrame();
+// Rendering-thread descriptor; valid until Poll/EndFrame/Shutdown changes it.
+int ActivityFd();
 float KeyboardHeight();
 std::string ConsumeError();
 void Shutdown();

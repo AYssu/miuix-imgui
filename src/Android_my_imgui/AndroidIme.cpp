@@ -386,6 +386,7 @@ void EndFrame() {
     Flush();
 }
 float KeyboardHeight() { return keyboard_height; }
+int ActivityFd() {return channel;}
 std::string ConsumeError() {
     std::string result;
     result.swap(error);
