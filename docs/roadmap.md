@@ -30,7 +30,7 @@
 | 第二批 | 闲置调度、动画唤醒、长数据示例 | 已实现：context / frame 重绘提示、触摸 / IME / 任务唤醒、可见行裁剪和稳定 ID / 滚动锚点；主机回归与小米真机对比 |
 | 第二批 | 可取消的异步加载完整示例 | 已实现：单 worker、进度 / 取消 / 错误 / 重试、generation 排除旧结果、退出 join；最多 10 万条数据回归 |
 | 第三批 | 交互检查、动画调试与高层自动化 | 待实施 |
-| 第三批 | CMake 安装 / 导出 / relocated consumer | 待实施 |
+| 第三批 | CMake 安装 / 导出 / relocated consumer | 已实现：随库 / 宿主 ImGui、仅路由组件、许可导出、移动目录后的独立消费与失败契约；GCC / Clang 运行验证、Android 交叉编译及原生 consumer 运行 |
 | 第三批 | 可选桌面 Gallery 宿主 | 待实施 |
 | 第三批 | API 版本、变更、兼容矩阵与发布规范 | 待实施 |
 | 单独评估 | GPU Glass 路径与 CPU 回退 | 待评估 |

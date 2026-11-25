@@ -10,6 +10,7 @@ python3 scripts/check-repository.py
 bash -n scripts/check.sh scripts/build-android.sh
 bash scripts/check.sh host
 bash scripts/check.sh consumer
+python3 scripts/check-package.py
 CC=clang CXX=clang++ bash scripts/check.sh host build/check-clang
 CC=clang CXX=clang++ \
   ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
@@ -33,6 +34,9 @@ Glass 的背景混色 / 纹理更新 / 缩放回收、零模糊细线清晰度�
 面包屑回归覆盖胶囊尺寸 / 高亮透明度、短路径无滚动条、长名称省略、首次定位、
 30/60/120 Hz 自动滚动与反向、同帧拖动取消点击、禁用时仍可滚动、负高亮索引及浅深色缩放。
 独立 consumer 编译、链接并产生绘制数据，验证公开 CMake 目标可被另一个项目使用。
+安装包测试另外覆盖随库 / 宿主 ImGui 的移动前缀消费、仅路由入口及负向配置契约，见 [CMake 包](packaging.md)。
+CI 的 Android 安装测试只交叉编译消费端；2026-11-25 的小米 Android 13 原生安装消费端亦运行通过，
+该次上传文件与进程均已清理。
 基础能力测试覆盖浅深色 / 缩放设计参数、宿主字体保留、真实容器顶点、局部主题嵌套与异常恢复，
 以及无效参数回退；验证采样关闭 / 清空、固定历史上限、精确分位数和采样 / 统计零动态分配。
 POSIX 主机还测试设置编解码、版本 / 默认值、损坏 / 超长输入、未知字段、原子替换、

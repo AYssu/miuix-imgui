@@ -16,8 +16,8 @@ cmake --build build/host --parallel 4
 ctest --test-dir build/host --output-on-failure
 ```
 
-库目标为 `skui::ui` 和 `skui::navigation`；当前接入方式为 `add_subdirectory`，
-尚未提供安装包或 `find_package(skui)`。
+库目标为 `skui::ui` 和 `skui::navigation`，支持 `add_subdirectory` 或安装后的
+`find_package(skui CONFIG REQUIRED)`。安装和移动目录后的验证见 [CMake 包](packaging.md)。
 
 ## Android Demo
 

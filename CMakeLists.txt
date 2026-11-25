@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(miuix-imgui VERSION 0.1.0 LANGUAGES C CXX)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 option(SKUI_BUILD_ANDROID_DEMO "Build the native Android floating gallery" ${ANDROID})
 option(SKUI_BUILD_TESTS "Build host-side component and navigation tests" OFF)
 option(SKUI_BUILD_BENCHMARKS "Build headless CPU performance probes" OFF)
+option(SKUI_INSTALL "Generate library installation and package exports" ON)
 set(SKUI_IMGUI_TARGET "" CACHE STRING "Existing host ImGui target; empty builds the bundled ImGui")
+set(SKUI_PACKAGE_FREETYPE OFF)
 
 if(SKUI_IMGUI_TARGET)
     if(NOT TARGET ${SKUI_IMGUI_TARGET})
@@ -15,7 +19,9 @@ else()
     add_library(skui-imgui STATIC
         src/ImGui/imgui.cpp src/ImGui/imgui_draw.cpp
         src/ImGui/imgui_tables.cpp src/ImGui/imgui_widgets.cpp)
-    target_include_directories(skui-imgui PUBLIC include/ImGui)
+    target_include_directories(skui-imgui PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImGui>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/skui/imgui>)
     target_compile_features(skui-imgui PUBLIC cxx_std_17)
     set(SKUI_IMGUI skui-imgui)
 endif()
@@ -23,13 +29,21 @@ endif()
 add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp
     src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp src/skui/runtime.cpp)
 add_library(skui::ui ALIAS skui-ui)
-target_include_directories(skui-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(skui-ui PUBLIC ${SKUI_IMGUI})
+target_include_directories(skui-ui PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+if(SKUI_IMGUI_TARGET)
+    target_link_libraries(skui-ui PUBLIC $<BUILD_INTERFACE:${SKUI_IMGUI}> $<INSTALL_INTERFACE:skui::imgui-host>)
+else()
+    target_link_libraries(skui-ui PUBLIC skui-imgui)
+endif()
 target_compile_features(skui-ui PUBLIC cxx_std_17)
 
 add_library(skui-navigation INTERFACE)
 add_library(skui::navigation ALIAS skui-navigation)
-target_include_directories(skui-navigation INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(skui-navigation INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(skui-navigation INTERFACE cxx_std_17)
 
 if(SKUI_BUILD_ANDROID_DEMO)
@@ -79,7 +93,8 @@ if(SKUI_BUILD_ANDROID_DEMO)
         target_compile_definitions(skui-imgui PUBLIC IMGUI_ENABLE_FREETYPE)
         target_include_directories(skui-imgui PRIVATE include/ImGui/misc/freetype)
         target_sources(skui-imgui PRIVATE src/ImGui/misc/freetype/imgui_freetype.cpp)
-        target_link_libraries(skui-imgui PUBLIC freetype z)
+        target_link_libraries(skui-imgui PUBLIC $<BUILD_INTERFACE:freetype> $<INSTALL_INTERFACE:Freetype::Freetype> z)
+        set(SKUI_PACKAGE_FREETYPE ON)
     endif()
     add_executable(sk-imgui-ui
         src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp examples/gallery/data_model.cpp
@@ -110,6 +125,32 @@ if(SKUI_BUILD_ANDROID_DEMO)
         include/Android_my_imgui "${skui_ime_generated}")
     target_compile_features(skui-ime-tests PRIVATE cxx_std_17)
     target_link_options(skui-ime-tests PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
+
+if(SKUI_INSTALL)
+    set_target_properties(skui-ui PROPERTIES EXPORT_NAME ui)
+    set_target_properties(skui-navigation PROPERTIES EXPORT_NAME navigation)
+    install(TARGETS skui-ui EXPORT skuiTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(TARGETS skui-navigation EXPORT skuiNavigationTargets)
+    if(NOT SKUI_IMGUI_TARGET)
+        set_target_properties(skui-imgui PROPERTIES EXPORT_NAME imgui)
+        install(TARGETS skui-imgui EXPORT skuiTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        install(FILES include/ImGui/imgui.h include/ImGui/imgui_internal.h include/ImGui/imconfig.h
+            include/ImGui/imstb_rectpack.h include/ImGui/imstb_textedit.h include/ImGui/imstb_truetype.h
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/skui/imgui)
+    endif()
+    install(DIRECTORY include/skui DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.h")
+    install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION ${CMAKE_INSTALL_DATADIR}/miuix-imgui)
+    install(DIRECTORY LICENSES DESTINATION ${CMAKE_INSTALL_DATADIR}/miuix-imgui)
+    set(skui_package_dir ${CMAKE_INSTALL_LIBDIR}/cmake/skui)
+    configure_package_config_file(cmake/skuiConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/skuiConfig.cmake
+        INSTALL_DESTINATION ${skui_package_dir})
+    write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/skuiConfigVersion.cmake
+        VERSION ${PROJECT_VERSION} COMPATIBILITY SameMinorVersion)
+    install(EXPORT skuiTargets NAMESPACE skui:: DESTINATION ${skui_package_dir})
+    install(EXPORT skuiNavigationTargets NAMESPACE skui:: DESTINATION ${skui_package_dir})
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/skuiConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/skuiConfigVersion.cmake
+        DESTINATION ${skui_package_dir})
 endif()
 
 if(SKUI_BUILD_BENCHMARKS)

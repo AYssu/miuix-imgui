@@ -40,6 +40,8 @@ jobs:
         run: bash scripts/check.sh host
       - name: Independent CMake consumer
         run: bash scripts/check.sh consumer
+      - name: Relocated installed packages, bundled and host ImGui
+        run: python3 scripts/check-package.py
       - name: Report Release CPU baseline
         if: matrix.cxx == 'g++'
         run: |
@@ -93,3 +95,5 @@ jobs:
         run: |
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify build/arm64-v8a/generated/ime/skui-ime-helper.apk
           python3 scripts/check-android-elf.py build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests
+      - name: Relocated Android library package consumers
+        run: python3 scripts/check-package.py --android-build build/arm64-v8a
