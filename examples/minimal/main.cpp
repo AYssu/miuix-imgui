@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstring>
 #include <skui/skui.h>
 
 // In a real host, call this between ImGui::NewFrame() and ImGui::Render().
@@ -17,6 +18,7 @@ void DrawSettings() {
 int main() {
     // Headless integration check. A host normally supplies its own window,
     // renderer, fonts and event loop instead of this one-frame setup.
+    if (skui::GetVersionNumber() != SKUI_VERSION_NUMBER || std::strcmp(skui::GetVersion(), SKUI_VERSION_STRING) != 0) return 2;
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     auto &io = ImGui::GetIO();

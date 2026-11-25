@@ -1,0 +1,43 @@
+name: Source package
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or tag to package (must contain the release scripts)'
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Validate source and packaging contract
+        run: |
+          python3 scripts/check-repository.py
+          python3 scripts/check-versions.py
+          python3 scripts/check-release.py
+      - name: Package the selected commit
+        env:
+          RELEASE_REF: ${{ inputs.ref || github.ref }}
+        run: |
+          python3 scripts/package-release.py --ref "$RELEASE_REF" --output build/release
+          cd build/release
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: miuix-imgui-source
+          path: build/release/
+          if-no-files-found: error
+          retention-days: 14

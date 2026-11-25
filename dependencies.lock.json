@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "imgui": {
+    "version": "1.93.0",
+    "commit": "c1aaac65e896a45f81f47a4d68f9959e0f86c859",
+    "archive": "https://codeload.github.com/ocornut/imgui/tar.gz/refs/tags/v1.93.0",
+    "sha256": "f7bf6bc76e5d79d40d751096663e6c5d18daf08129dd52e7f7b09e4251c8eeee",
+    "license": "LICENSES/Dear-ImGui-MIT.txt"
+  },
+  "freetype": {
+    "version": "2.13.3",
+    "tag": "VER-2-13-3",
+    "commit": "42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+    "archive": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-13-3",
+    "sha256": "bc5c898e4756d373e0d991bab053036c5eb2aa7c0d5c67e8662ddc6da40c4103",
+    "license": "LICENSES/FreeType-FTL.txt"
+  },
+  "android": {
+    "ndk": "28.2.13676358",
+    "sdk_platform": "36",
+    "build_tools": "36.0.0",
+    "java": "17",
+    "native_api": "28",
+    "abi": "arm64-v8a",
+    "stl": "c++_static"
+  },
+  "desktop": {
+    "sdl2_minimum": "2.0.18",
+    "opengl": "3.0 (macOS 3.2)",
+    "ownership": "system packages; record actual versions with each binary build"
+  }
+}

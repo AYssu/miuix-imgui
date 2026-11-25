@@ -105,3 +105,5 @@ docs/, LICENSES/         规范、验证证据和第三方许可原文
 公开完整 Android 源码或二进制前，需要补齐清单中的来源确认项。
 
 开发时可使用 [交互检查与动画调试](docs/devtools.md)，默认关闭，按需启用。
+
+版本与交付：[变更记录](CHANGELOG.md)、[发布规范](docs/releases.md)、[兼容矩阵](docs/compatibility.md)。

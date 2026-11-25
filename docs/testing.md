@@ -29,7 +29,7 @@ CC=clang CXX=clang++ \
 主机测试使用真实 ImGui 帧及合成输入，覆盖路由、控件事件、禁用/取消点击、缩放、
 拖动/滚动、选择与级联菜单、弹层层级、UTF-8 编辑回填、折叠/侧栏/提示等动画。
 折叠与侧栏已有 30/60/120 Hz 时间步长测试；不是所有动画都已逐一覆盖三种频率。
-CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests` 和 `skui-keyboard-tests`。
+CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests` 、`skui-devtools-tests` 和 `skui-keyboard-tests`。
 高级测试检查 9 个 Window 接口的绘制分层、提交失败回退及关闭通知，2916 个颜色往返和参考值，
 Glass 的背景混色 / 纹理更新 / 缩放回收、零模糊细线清晰度、局部坐标、快照隔离及帧缓冲缩放，
 以及模糊强度跨整数边界的连续性、细条纹随背景移动时的过滤稳定性，

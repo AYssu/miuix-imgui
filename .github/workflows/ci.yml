@@ -35,6 +35,8 @@ jobs:
       - name: Check repository, documentation and scripts
         run: |
           python3 scripts/check-repository.py
+          python3 scripts/check-versions.py
+          python3 scripts/check-release.py
           bash -n scripts/check.sh scripts/build-android.sh
       - name: Component and navigation regressions
         run: bash scripts/check.sh host
@@ -48,6 +50,7 @@ jobs:
           cmake -S . -B build/performance -DCMAKE_BUILD_TYPE=Release -DSKUI_BUILD_ANDROID_DEMO=OFF -DSKUI_BUILD_BENCHMARKS=ON
           cmake --build build/performance --parallel 4
           build/performance/skui-foundation-benchmark
+          build/performance/skui-glass-benchmark
 
   sanitizers:
     name: ASan + UBSan

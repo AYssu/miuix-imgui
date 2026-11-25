@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "skui/version.h"
 #include "skui/router.h"
 #include "skui/theme.h"
 #include "skui/runtime.h"

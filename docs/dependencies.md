@@ -49,3 +49,6 @@ SDL2 后端从上述已校验归档中提取，保持原文：`imgui_impl_sdl2.h
 
 FreeType 仍固定为 `VER-2-13-3`，源码归档与哈希记录于 CMake 和
 [第三方说明](../THIRD_PARTY_NOTICES.md)，本次未改变其版本。
+
+可机器读取的固定依赖见 [dependencies.lock.json](../dependencies.lock.json)，CI 用 `scripts/check-versions.py`
+核对公开版本、构建声明和锁。桌面系统依赖只约束最低版本，实际二进制交付需记录宿主解析版本。

@@ -172,6 +172,8 @@ endif()
 if(SKUI_BUILD_BENCHMARKS)
     add_executable(skui-foundation-benchmark benchmarks/foundations.cpp)
     target_link_libraries(skui-foundation-benchmark PRIVATE skui::ui)
+    add_executable(skui-glass-benchmark benchmarks/glass.cpp)
+    target_link_libraries(skui-glass-benchmark PRIVATE skui::ui)
 endif()
 
 if(SKUI_BUILD_TESTS)

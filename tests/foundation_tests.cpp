@@ -7,6 +7,7 @@
 #include <limits>
 #include <new>
 #include <stdexcept>
+#include <string>
 #if defined(__unix__)
 #include "preferences.h"
 #include <filesystem>
@@ -181,6 +182,7 @@ void Preferences() {
 #endif
 }
 int main() {
+    CHECK(skui::GetVersionNumber()==SKUI_VERSION_NUMBER && std::string(skui::GetVersion())==SKUI_VERSION_STRING);
     Themes();Profiling();
 #if defined(__unix__)
     Preferences();

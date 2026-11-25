@@ -739,7 +739,7 @@ struct Gallery {
         skui::EndCard();
         skui::Section("关于");
         if (skui::BeginCard("about")) {
-            skui::ListItem("lib", "sk-imgui-ui", nullptr, "0.1.0", false);
+            skui::ListItem("lib", "sk-imgui-ui", nullptr, skui::GetVersion(), false);
             skui::Divider();
             skui::ListItem("renderer", "渲染接口", nullptr, "Vulkan", false);
             char fps[32];

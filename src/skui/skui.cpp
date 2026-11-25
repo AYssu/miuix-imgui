@@ -8,6 +8,9 @@
 #include <vector>
 
 namespace skui {
+const char *GetVersion() {return SKUI_VERSION_STRING;}
+unsigned GetVersionNumber() {return SKUI_VERSION_NUMBER;}
+
 namespace {
 // Call ApplyTheme after selecting the host context, on the rendering thread.
 thread_local Theme theme;
