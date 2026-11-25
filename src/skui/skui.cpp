@@ -50,7 +50,7 @@ ImVec2 Add(ImVec2 a, float x, float y) { return ImVec2(a.x + x, a.y + y); }
 float Width() { return ImGui::GetContentRegionAvail().x; }
 void Label(ImDrawList *draw, ImVec2 p, const char *text, ImVec4 color, float size = 16) {
     if (text)
-        draw->AddText(ImGui::GetFont(), Dp(size), p, U(color), text);
+        draw->AddText(ImGui::GetFont(), TextSize(size), p, U(color), text);
 }
 thread_local ImGuiID scrollable_item = 0;
 void AllowScroll() {
@@ -67,8 +67,8 @@ struct Row {
         max = ImGui::GetItemRectMax();
         hovered = ImGui::IsItemHovered();
         float a = detail::InteractionFeedback(0.f,1.f);
-        auto color = Color(0xF0F3FA, 0x30343E); color.w *= a;
-        if (a > 0) ImGui::GetWindowDrawList()->AddRectFilled(min, max, U(color), Dp(10));
+        auto color = Colors().interaction; color.w *= a;
+        if (a > 0) ImGui::GetWindowDrawList()->AddRectFilled(min, max, U(color), Dp(GetTheme().tokens.press_radius));
     }
 };
 void CheckMark(ImDrawList *d, ImVec2 center, ImU32 color, float r) {
@@ -231,47 +231,84 @@ void PerformHaptic(Haptic event) {
 }
 float Dp(float v) { return v * theme.scale; }
 const Theme &GetTheme() { return theme; }
-ImVec4 Background() { return Color(0xF5F6F8, 0x121316); }
-ImVec4 Surface() { return Color(0xFFFFFF, 0x202126); }
-ImVec4 TextColor() { return Color(0x181A20, 0xF3F4F7); }
-ImVec4 MutedColor() { return Color(0x7B808D, 0x9CA1AE); }
+ImVec4 Background() { return Colors().background; }
+ImVec4 Surface() { return Colors().surface; }
+ImVec4 TextColor() { return Colors().text; }
+ImVec4 MutedColor() { return Colors().muted; }
 void ApplyTheme(const Theme &value) {
     theme = value;
-    theme.scale = std::max(.5f, std::min(4.f, theme.scale));
+    auto bounded = [](float v, float fallback, float lo, float hi) {
+        return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback;
+    };
+    theme.scale = bounded(theme.scale,1,.5f,4);
+    theme.motion_response = bounded(theme.motion_response,.8f,.05f,4);
+    theme.motion_damping = bounded(theme.motion_damping,.95f,0,4);
     theme.motion_duration_scale=std::isfinite(theme.motion_duration_scale) ? std::clamp(theme.motion_duration_scale,.05f,10.f) : 1.f;
+    auto &tokens = theme.tokens;
+    DesignTokens defaults;
+    for (auto field : {&DesignTokens::window_radius, &DesignTokens::card_radius,
+            &DesignTokens::control_radius, &DesignTokens::popup_radius, &DesignTokens::row_radius,
+            &DesignTokens::press_radius, &DesignTokens::menu_radius, &DesignTokens::scrollbar_size,
+            &DesignTokens::border_width, &DesignTokens::shadow_size})
+        tokens.*field = bounded(tokens.*field, defaults.*field, 0, 100);
+    tokens.disabled_alpha = bounded(tokens.disabled_alpha,.38f,0,1);
+    tokens.shadow_alpha = bounded(tokens.shadow_alpha,.012f,0,1);
+    tokens.text_scale = bounded(tokens.text_scale,1,.5f,2);
+    for (auto field : {&DesignTokens::window_padding, &DesignTokens::frame_padding,
+            &DesignTokens::item_spacing, &DesignTokens::card_padding,
+            &DesignTokens::surface_padding, &DesignTokens::popup_padding}) {
+        (tokens.*field).x = bounded((tokens.*field).x,(defaults.*field).x,0,100);
+        (tokens.*field).y = bounded((tokens.*field).y,(defaults.*field).y,0,100);
+    }
+    auto color = [&](ImVec4 &c, ImVec4 fallback) {
+        c.x=bounded(c.x,fallback.x,0,1); c.y=bounded(c.y,fallback.y,0,1);
+        c.z=bounded(c.z,fallback.z,0,1); c.w=bounded(c.w,fallback.w,0,1);
+    };
+    color(theme.accent,ImVec4(.2f,.48f,1,1));
+    for (bool dark : {false,true}) {
+        auto &palette = dark ? theme.dark_palette : theme.light;
+        auto fallback = DefaultPalette(dark);
+        for (auto field : {&Palette::background,&Palette::surface,&Palette::text,&Palette::muted,
+                &Palette::border,&Palette::field,&Palette::field_hovered,&Palette::field_active,
+                &Palette::selection,&Palette::selection_hovered,&Palette::scrollbar,&Palette::separator,
+                &Palette::neutral,&Palette::danger_surface,&Palette::danger_text,&Palette::interaction,
+                &Palette::icon_feedback,&Palette::toggle_off,&Palette::checkbox_off,&Palette::track,
+                &Palette::badge,&Palette::navigation,&Palette::scrim})
+            color(palette.*field,fallback.*field);
+    }
     ImGuiStyle style;
     const auto &host_style=ImGui::GetStyle();
     style.FontSizeBase=host_style.FontSizeBase;
     style.FontScaleMain=host_style.FontScaleMain;
     style.FontScaleDpi=host_style.FontScaleDpi;
-    // ImGui floors auto-fit window sizes. Fractional padding could leave a
-    // sub-pixel scroll extent (e.g. 0.6px at 2.2x) on a three-item popup.
-    style.WindowPadding = ImVec2(std::round(Dp(20)), std::round(Dp(14)));
-    style.FramePadding = ImVec2(Dp(14), Dp(12));
-    style.ItemSpacing = ImVec2(Dp(10), Dp(8));
+    const auto &t = theme.tokens;
+    // Pixel-aligned padding prevents a subpixel scroll extent in short menus.
+    style.WindowPadding = ImVec2(std::round(Dp(t.window_padding.x)), std::round(Dp(t.window_padding.y)));
+    style.FramePadding = ImVec2(Dp(t.frame_padding.x), Dp(t.frame_padding.y));
+    style.ItemSpacing = ImVec2(Dp(t.item_spacing.x), Dp(t.item_spacing.y));
     style.ItemInnerSpacing = ImVec2(Dp(8), Dp(6));
-    style.WindowRounding = Dp(24);
-    style.ChildRounding = Dp(18);
-    style.FrameRounding = Dp(12);
-    style.PopupRounding = Dp(22);
+    style.WindowRounding = Dp(t.window_radius);
+    style.ChildRounding = Dp(t.card_radius);
+    style.FrameRounding = Dp(t.control_radius);
+    style.PopupRounding = Dp(t.popup_radius);
     style.GrabRounding = Dp(8);
-    style.ScrollbarRounding = Dp(5);
-    style.ScrollbarSize = Dp(5);
-    style.WindowBorderSize = Dp(1);
+    style.ScrollbarRounding = Dp(t.scrollbar_size);
+    style.ScrollbarSize = Dp(t.scrollbar_size);
+    style.WindowBorderSize = Dp(t.border_width);
     style.ChildBorderSize = 0;
     style.PopupBorderSize = 0;
     style.FrameBorderSize = 0;
     style.GrabMinSize = Dp(22);
-    style.DisabledAlpha = .38f;
+    style.DisabledAlpha = t.disabled_alpha;
     style.Colors[ImGuiCol_Text] = TextColor();
     style.Colors[ImGuiCol_TextDisabled] = MutedColor();
     style.Colors[ImGuiCol_WindowBg] = Background();
     style.Colors[ImGuiCol_ChildBg] = Surface();
     style.Colors[ImGuiCol_PopupBg] = Surface();
-    style.Colors[ImGuiCol_Border] = Color(0xE0E3E9, 0x383B43);
-    style.Colors[ImGuiCol_FrameBg] = Color(0xEFF1F5, 0x2B2E36);
-    style.Colors[ImGuiCol_FrameBgHovered] = Color(0xE5E9F1, 0x353945);
-    style.Colors[ImGuiCol_FrameBgActive] = Color(0xDCE4F3, 0x3C4353);
+    style.Colors[ImGuiCol_Border] = Colors().border;
+    style.Colors[ImGuiCol_FrameBg] = Colors().field;
+    style.Colors[ImGuiCol_FrameBgHovered] = Colors().field_hovered;
+    style.Colors[ImGuiCol_FrameBgActive] = Colors().field_active;
     style.Colors[ImGuiCol_Button] = theme.accent;
     style.Colors[ImGuiCol_ButtonHovered] =
         ImVec4(theme.accent.x * .9f, theme.accent.y * .9f, theme.accent.z * .9f, 1);
@@ -280,13 +317,13 @@ void ApplyTheme(const Theme &value) {
     style.Colors[ImGuiCol_CheckMark] = theme.accent;
     style.Colors[ImGuiCol_SliderGrab] = theme.accent;
     style.Colors[ImGuiCol_SliderGrabActive] = theme.accent;
-    style.Colors[ImGuiCol_Header] = Color(0xE9EDF5, 0x343A48);
-    style.Colors[ImGuiCol_HeaderHovered] = Color(0xE1E8F5, 0x3B4354);
+    style.Colors[ImGuiCol_Header] = Colors().selection;
+    style.Colors[ImGuiCol_HeaderHovered] = Colors().selection_hovered;
     style.Colors[ImGuiCol_HeaderActive] = theme.accent;
     style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_ScrollbarGrab] = Color(0xCCD0DA, 0x525866);
-    style.Colors[ImGuiCol_Separator] = Color(0xECEEF2, 0x33363E);
-    style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, .32f);
+    style.Colors[ImGuiCol_ScrollbarGrab] = Colors().scrollbar;
+    style.Colors[ImGuiCol_Separator] = Colors().separator;
+    style.Colors[ImGuiCol_ModalWindowDimBg] = Colors().scrim;
     style.Colors[ImGuiCol_NavHighlight] = theme.accent;
     ImGui::GetStyle() = style;
 }
@@ -398,7 +435,7 @@ void Collapsible(const char *id, bool expanded, const std::function<void()> &con
     ImGui::PopID();
 }
 bool BeginCard(const char *id) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Dp(16), Dp(10)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Dp(theme.tokens.card_padding.x), Dp(theme.tokens.card_padding.y)));
     return ImGui::BeginChild(id, ImVec2(0, 0),
                              ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -457,10 +494,10 @@ bool Button(const char *label, Tone tone, ImVec2 size) {
     if (size.y <= 0)
         size.y = Dp(44);
     ImVec4 bg = tone == Tone::Primary  ? theme.accent
-                : tone == Tone::Danger ? Color(0xFCEBEB, 0x46282D)
-                                       : Color(0xECEEF3, 0x333640);
+                : tone == Tone::Danger ? Colors().danger_surface
+                                       : Colors().neutral;
     ImVec4 fg = tone == Tone::Primary  ? ImVec4(1, 1, 1, 1)
-                : tone == Tone::Danger ? Color(0xDB3D4C, 0xFF8A95)
+                : tone == Tone::Danger ? Colors().danger_text
                                        : TextColor();
     ImGui::PushID(label);
     bg.x=detail::Animate("bg/r",bg.x); bg.y=detail::Animate("bg/g",bg.y); bg.z=detail::Animate("bg/b",bg.z);
@@ -497,7 +534,7 @@ bool IconButton(const char *id, Icon icon) {
     ImVec2 p = ImGui::GetCursorScreenPos();
     bool clicked = ImGui::InvisibleButton(id, ImVec2(Dp(36), Dp(36)));
     float a=detail::InteractionFeedback(.5f,1.f);
-    auto bg=Color(0xE6E9EF, 0x353943); bg.w*=a;
+    auto bg=Colors().icon_feedback; bg.w*=a;
     if (a>0)
         ImGui::GetWindowDrawList()->AddRectFilled(p, Add(p, Dp(36), Dp(36)), U(bg),
                                                   Dp(12));
@@ -516,7 +553,7 @@ bool Toggle(const char *label, bool *value, const char *description) {
     if (description)
         Label(d, Add(row.min, 0, Dp(36)), description, MutedColor(), 12);
     ImVec2 p(row.max.x - Dp(46), cy - Dp(13));
-    ImVec4 off = Color(0xE4E6EA, 0x494D57);
+    ImVec4 off = Colors().toggle_off;
     ImVec4 bg = ImLerp(off, theme.accent, a);
     d->AddRectFilled(p, Add(p, Dp(46), Dp(26)), U(bg), Dp(13));
     d->AddCircleFilled(Add(p, Dp(13 + 20 * a), Dp(13)), Dp(9.5f), U(ImVec4(1, 1, 1, 1)), 24);
@@ -531,7 +568,7 @@ bool Checkbox(const char *label, bool *value) {
     auto *d = ImGui::GetWindowDrawList();
     ImVec2 c = Add(row.min, Dp(12), Dp(24));
     float a = detail::Animate("selected", *value ? 1.f : 0.f);
-    d->AddCircleFilled(c, Dp(11), U(ImLerp(Color(0xE5E7EC, 0x444955), theme.accent, a)), 24);
+    d->AddCircleFilled(c, Dp(11), U(ImLerp(Colors().checkbox_off, theme.accent, a)), 24);
     if (a > 0)
         CheckMark(d, c, U(ImVec4(1, 1, 1, a)), Dp(10) * (.6f + .4f*a));
     Label(d, Add(row.min, Dp(36), Dp(14)), label, TextColor());
@@ -569,7 +606,7 @@ bool Slider(const char *label, float *value, float minimum, float maximum, const
     auto *draw=ImGui::GetWindowDrawList(); float radius=Dp(10),cy=(min.y+max.y)/2;
     float left=min.x+radius,right=max.x-radius;
     float x=left+(right-left)*std::clamp((*value-minimum)/(maximum-minimum),0.f,1.f);
-    draw->AddRectFilled(ImVec2(left,cy-Dp(3)),ImVec2(right,cy+Dp(3)),U(Color(0xE4E6EC,0x444955)),Dp(3));
+    draw->AddRectFilled(ImVec2(left,cy-Dp(3)),ImVec2(right,cy+Dp(3)),U(Colors().track),Dp(3));
     if(x>left) draw->AddRectFilled(ImVec2(left,cy-Dp(3)),ImVec2(x,cy+Dp(3)),U(theme.accent),Dp(3));
     draw->AddCircleFilled(ImVec2(x,cy),radius,U(theme.accent),32);
     char number[64];ImFormatString(number,sizeof(number),format ? format : "%.0f",*value);
@@ -616,8 +653,8 @@ bool ListItem(const char *id, const char *title, const char *description, const 
     if (description)
         Label(d, Add(row.min, 0, Dp(37)), description, MutedColor(), 12);
     if (value) {
-        auto size = ImGui::GetFont()->CalcTextSizeA(Dp(13), FLT_MAX, 0, value);
-        Label(d, ImVec2(row.max.x - size.x - Dp(arrow ? 26 : 0), (row.min.y + row.max.y - Dp(13)) * .5f),
+        auto size = ImGui::GetFont()->CalcTextSizeA(TextSize(13), FLT_MAX, 0, value);
+        Label(d, ImVec2(row.max.x - size.x - Dp(arrow ? 26 : 0), (row.min.y + row.max.y - TextSize(13)) * .5f),
               value, MutedColor(), 13);
     }
     if (arrow)
@@ -647,14 +684,14 @@ bool TabBar(const char *id, const char *const *labels, int count, int *selected)
     auto *draw = ImGui::GetWindowDrawList();
     for (int i=0;i<count;++i) {
         auto p=Add(origin,i*(w+Dp(4)),0);
-        draw->AddRectFilled(p,Add(p,w,Dp(38)),U(Color(0xECEEF3,0x333640)),Dp(14));
+        draw->AddRectFilled(p,Add(p,w,Dp(38)),U(Colors().neutral),Dp(14));
     }
     float position=detail::Animate("indicator",static_cast<float>(std::clamp(*selected,0,count-1)),.26f);
     auto indicator=Add(origin,position*(w+Dp(4)),0);
     draw->AddRectFilled(indicator,Add(indicator,w,Dp(38)),U(theme.accent),Dp(14));
     for(int i=0;i<count;++i) {
         float a=std::max(0.f,1.f-std::abs(position-i));
-        auto size=ImGui::GetFont()->CalcTextSizeA(Dp(16),FLT_MAX,0,labels[i]);
+        auto size=ImGui::GetFont()->CalcTextSizeA(TextSize(16),FLT_MAX,0,labels[i]);
         auto p=Add(origin,i*(w+Dp(4)),0);
         draw->PushClipRect(p,Add(p,w,Dp(38)),true);
         Label(draw,Add(p,(w-size.x)/2,(Dp(38)-size.y)/2),labels[i],ImLerp(TextColor(),ImVec4(1,1,1,1),a));
@@ -677,7 +714,7 @@ void Badge(const char *label) {
     auto p = ImGui::GetCursorScreenPos();
     auto size = ImGui::CalcTextSize(label);
     ImVec2 max = Add(p, size.x + Dp(20), size.y + Dp(8));
-    ImGui::GetWindowDrawList()->AddRectFilled(p, max, U(Color(0xE8F0FF, 0x243650)), Dp(7));
+    ImGui::GetWindowDrawList()->AddRectFilled(p, max, U(Colors().badge), Dp(7));
     Label(ImGui::GetWindowDrawList(), Add(p, Dp(10), Dp(4)), label, theme.accent, 13);
     ImGui::Dummy(ImVec2(max.x - p.x, max.y - p.y));
 }
@@ -806,13 +843,13 @@ bool BeginShell(const ShellOptions &o) {
             ImGui::PopID();
             ImVec4 color = ImLerp(MutedColor(), theme.accent, a);
             if (a > 0 && shell.wide)
-                d->AddRectFilled(p, Add(p, cell, Dp(48)), U(Color(0xE5EDFC, 0x26344C)), Dp(14));
+                d->AddRectFilled(p, Add(p, cell, Dp(48)), U(Colors().navigation), Dp(14));
             ImVec2 c = shell.wide ? Add(p, Dp(22), Dp(24)) : Add(p, cell * .5f, Dp(16));
             DrawIcon(o.items[i].icon, c, Dp(21), U(color));
             if (shell.wide)
                 Label(d, Add(p, Dp(44), Dp(16)), o.items[i].label, color, 14);
             else {
-                auto ts = ImGui::GetFont()->CalcTextSizeA(Dp(11), FLT_MAX, 0, o.items[i].label);
+                auto ts = ImGui::GetFont()->CalcTextSizeA(TextSize(11), FLT_MAX, 0, o.items[i].label);
                 Label(d, Add(p, (cell - ts.x) * .5f, Dp(34)), o.items[i].label, color, 11);
             }
         }
@@ -851,7 +888,7 @@ void Snackbar::Draw(ImVec2 p, float width) {
     p.y += Dp(14)*(1-opacity_);
     auto *d = ImGui::GetForegroundDrawList();
     d->AddRectFilled(p, Add(p, width, Dp(46)), IM_COL32(36, 39, 47, static_cast<int>(245*opacity_)), Dp(14));
-    d->AddText(ImGui::GetFont(), Dp(14), Add(p, Dp(16), Dp(14)), IM_COL32(255, 255, 255, static_cast<int>(255*opacity_)),
+    d->AddText(ImGui::GetFont(), TextSize(14), Add(p, Dp(16), Dp(14)), IM_COL32(255, 255, 255, static_cast<int>(255*opacity_)),
                message_.c_str());
 }
 } // namespace skui

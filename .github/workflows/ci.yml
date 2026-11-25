@@ -40,6 +40,12 @@ jobs:
         run: bash scripts/check.sh host
       - name: Independent CMake consumer
         run: bash scripts/check.sh consumer
+      - name: Report Release CPU baseline
+        if: matrix.cxx == 'g++'
+        run: |
+          cmake -S . -B build/performance -DCMAKE_BUILD_TYPE=Release -DSKUI_BUILD_ANDROID_DEMO=OFF -DSKUI_BUILD_BENCHMARKS=ON
+          cmake --build build/performance --parallel 4
+          build/performance/skui-foundation-benchmark
 
   sanitizers:
     name: ASan + UBSan

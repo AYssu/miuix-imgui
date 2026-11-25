@@ -16,6 +16,7 @@ void RequestStop(int) { stop_requested = 1; }
 #include "AndroidHaptics.h"
 #include "GraphicsManager.h" //获取 当前渲染模式
 #include "draw.h"            //绘制套
+#include "gallery.h"
 
 int main(int argc, char *argv[]) {
     if (argc > 1 && std::strcmp(argv[1], "--ime-host") == 0)
@@ -28,6 +29,11 @@ int main(int argc, char *argv[]) {
         return AndroidIme::Diagnose(true);
     if (argc > 1 && (0 == std::strcmp(argv[1], "--diagnose") || 0 == std::strcmp(argv[1], "-d"))) {
         return android::ANativeWindowCreator::SelfCheck() ? 0 : 1;
+    }
+    const char *settings_path=nullptr;
+    for (int i=1; i<argc; ++i) {
+        if (std::strcmp(argv[i],"--settings")==0 && i+1<argc && argv[i+1][0]) settings_path=argv[++i];
+        else {fprintf(stderr,"Usage: sk-imgui-ui [--settings <path>]\n"); return 1;}
     }
 
     // The lock is scoped to this executable path and released by the kernel on
@@ -87,23 +93,31 @@ int main(int argc, char *argv[]) {
     }
     Touch::setOrientation(displayInfo.orientation);
 
+    gallery::ConfigurePreferences(settings_path);
     ::init_My_drawdata(); // 初始化绘制数据
     AndroidIme::Init();
     AndroidHaptics::Init();
     static bool flag = true;
+    auto &profiler=gallery::Profiler();
     while (flag && !stop_requested) {
+        profiler.BeginFrame();
         drawBegin();
         Touch::Poll();
         AndroidIme::Poll();
         AndroidHaptics::Poll();
         graphics->NewFrame();
+        profiler.EndInput();
 
         Layout_tick_UI(&flag);
         AndroidIme::EndFrame();
+        profiler.EndBuild();
 
         graphics->EndFrame();
+        profiler.EndFrame();
+        gallery::FlushPreferences();
     }
 
+    gallery::FlushPreferences(true);
     AndroidIme::Shutdown();
     AndroidHaptics::Shutdown();
     Touch::Close();

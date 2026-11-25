@@ -74,7 +74,8 @@ bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags) {
     float alpha = exit ? state.GetFloat(exit_from, 1) * (1-eased) : eased;
     state.SetFloat(opacity, alpha);
     state.SetInt(kind_key, static_cast<int>(kind));
-    window->DC.ModalDimBgColor = ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, .32f * alpha));
+    auto scrim = Colors().scrim; scrim.w *= alpha;
+    window->DC.ModalDimBgColor = ImGui::ColorConvertFloat4ToU32(scrim);
     if (!GetTheme().animations) GImGui->DimBgRatio = 1;
     // A down event on the scrim is consumed by the modal. It never activates
     // the page underneath, including during the exit transition.

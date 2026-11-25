@@ -76,6 +76,8 @@ target_link_libraries(your-app PRIVATE skui::ui skui::navigation)
 | [新增组件规范](docs/component-development.md) | API、实现归属、交互、过渡、示例与测试要求 |
 | [构建规范](docs/building.md) | 工具链、CMake 参数、产物与依赖 |
 | [测试规范](docs/testing.md) | 主机、Sanitizer、接入测试、真机验证与清理 |
+| [基础能力路线图](docs/roadmap.md) | 同类项目参考、当前差距、实施顺序与验收标准 |
+| [主题、设置与性能](docs/foundations.md) | 设计参数、局部主题、可选设置保存、固定容量性能采样 |
 | [CI 工作流](.github/workflows/ci.yml) | GCC/Clang、ASan/UBSan、独立接入及 Android 构建 |
 
 ```text

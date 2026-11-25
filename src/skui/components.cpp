@@ -42,16 +42,16 @@ bool Choice(const ChoiceItem &item, bool selected, int index) {
         auto color = GetTheme().accent;
         color.w = std::max(.12f*selection,feedback);
         draw->AddRectFilled(Offset(p,Dp(2),0), Offset(ImGui::GetItemRectMax(),-Dp(2),0),
-                            U(color), Dp(14));
+                            U(color), Dp(GetTheme().tokens.menu_radius));
     }
     float left = item.icon == Icon::None ? Dp(12) : Dp(44);
     if (item.icon != Icon::None)
         DrawIcon(item.icon, Offset(p, Dp(22), height / 2), Dp(21), U(TextColor()));
     draw->PushClipRect(p, Offset(p, ImGui::GetItemRectSize().x - Dp(30), height), true);
-    draw->AddText(ImGui::GetFont(), Dp(15), Offset(p, left, Dp(item.description ? 9 : 14)),
+    draw->AddText(ImGui::GetFont(), TextSize(15), Offset(p, left, Dp(item.description ? 9 : 14)),
                   U(TextColor()), item.label);
     if (item.description)
-        draw->AddText(ImGui::GetFont(), Dp(11), Offset(p, left, Dp(34)), U(MutedColor()), item.description);
+        draw->AddText(ImGui::GetFont(), TextSize(11), Offset(p, left, Dp(34)), U(MutedColor()), item.description);
     draw->PopClipRect();
     if (selection>0) {
         auto color=GetTheme().accent; color.w*=selection;
@@ -78,7 +78,7 @@ bool BeginListPopup(const char *id) {
     // A popup opened inside a card inherits that card's fractional padding,
     // bypassing the global theme. Own and pixel-align popup padding here too.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(std::round(Dp(16)),std::round(Dp(12))));
+                        ImVec2(std::round(Dp(GetTheme().tokens.popup_padding.x)),std::round(Dp(GetTheme().tokens.popup_padding.y))));
     bool visible=detail::BeginOverlay(id, detail::OverlayKind::Popup, ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::PopStyleVar();
     return visible;
@@ -422,7 +422,7 @@ bool NumberPicker(const char *label, int *value, int minimum, int maximum, int s
     for (std::int64_t i=std::max<std::int64_t>(0,center-3); i<=std::min(count-1,center+3); ++i) {
         float distance = static_cast<float>(i-position);
         float fade = std::clamp(std::abs(distance)/2.5f,0.f,1.f);
-        float size = Dp(26)*(1-.2f*fade);
+        float size = TextSize(26)*(1-.2f*fade);
         auto color = TextColor(), muted = MutedColor();
         color.x += (muted.x-color.x)*fade; color.y += (muted.y-color.y)*fade;
         color.z += (muted.z-color.z)*fade; color.w *= (1-fade)*(1-.5f*fade);
@@ -617,7 +617,7 @@ bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *se
     if (!selected || !labels || count <= 0 || ImGui::GetCurrentWindow()->SkipItems) return false;
     auto origin=ImGui::GetCursorScreenPos();float width=ImGui::GetContentRegionAvail().x;
     float viewport=std::max(1.f,width-Dp(24)),height=Dp(32),separator=Dp(18);
-    ImGui::PushID(id);ImGui::PushFont(nullptr,Dp(14));
+    ImGui::PushID(id);ImGui::PushFont(nullptr,TextSize(14));
     auto *state=ImGui::GetStateStorage();
     std::vector<float> widths(count),offsets(count),feedback(count);
     std::vector<ImRect> bounds(count);

@@ -3,6 +3,7 @@ project(miuix-imgui VERSION 0.1.0 LANGUAGES C CXX)
 
 option(SKUI_BUILD_ANDROID_DEMO "Build the native Android floating gallery" ${ANDROID})
 option(SKUI_BUILD_TESTS "Build host-side component and navigation tests" OFF)
+option(SKUI_BUILD_BENCHMARKS "Build headless CPU performance probes" OFF)
 set(SKUI_IMGUI_TARGET "" CACHE STRING "Existing host ImGui target; empty builds the bundled ImGui")
 
 if(SKUI_IMGUI_TARGET)
@@ -20,7 +21,7 @@ else()
 endif()
 
 add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp
-    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp)
+    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp)
 add_library(skui::ui ALIAS skui-ui)
 target_include_directories(skui-ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(skui-ui PUBLIC ${SKUI_IMGUI})
@@ -80,7 +81,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         target_link_libraries(skui-imgui PUBLIC freetype z)
     endif()
     add_executable(sk-imgui-ui
-        src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp
+        src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp
         src/Android_touch/TouchHelperA.cpp
         src/Android_Graphics/GraphicsManager.cpp src/Android_Graphics/OpenGLGraphics.cpp
         src/Android_Graphics/VulkanGraphics.cpp src/Android_Graphics/vulkan_wrapper.cpp
@@ -109,6 +110,11 @@ if(SKUI_BUILD_ANDROID_DEMO)
     target_link_options(skui-ime-tests PRIVATE "-Wl,-z,max-page-size=16384")
 endif()
 
+if(SKUI_BUILD_BENCHMARKS)
+    add_executable(skui-foundation-benchmark benchmarks/foundations.cpp)
+    target_link_libraries(skui-foundation-benchmark PRIVATE skui::ui)
+endif()
+
 if(SKUI_BUILD_TESTS)
     enable_testing()
     add_executable(skui-tests tests/skui_tests.cpp)
@@ -117,4 +123,11 @@ if(SKUI_BUILD_TESTS)
     add_executable(skui-advanced-tests tests/advanced_tests.cpp)
     target_link_libraries(skui-advanced-tests PRIVATE skui::ui)
     add_test(NAME skui-advanced-tests COMMAND skui-advanced-tests)
+    add_executable(skui-foundation-tests tests/foundation_tests.cpp)
+    target_link_libraries(skui-foundation-tests PRIVATE skui::ui)
+    if(UNIX)
+        target_sources(skui-foundation-tests PRIVATE examples/gallery/preferences.cpp)
+        target_include_directories(skui-foundation-tests PRIVATE examples/gallery)
+    endif()
+    add_test(NAME skui-foundation-tests COMMAND skui-foundation-tests)
 endif()

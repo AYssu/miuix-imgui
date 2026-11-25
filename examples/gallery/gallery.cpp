@@ -1,9 +1,11 @@
 #include "gallery.h"
+#include "preferences.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <chrono>
 #include <string>
 
 namespace gallery {
@@ -90,6 +92,34 @@ struct Gallery {
     skui::GlassStyle glass_style;
     skui::TopAppBarState appbar;
     char catalogue_search[96]="";
+    skui::FrameProfiler profiler;
+    std::string preferences_path;
+    Preferences saved;
+    bool save_requested = false, auto_save = false;
+
+    Preferences CapturePreferences() const {
+        Preferences p=saved;
+        p.theme=theme; p.wide=wide; p.sidebar_expanded=sidebar_expanded;
+        return p;
+    }
+    void ConfigurePreferences(const char *path) {
+        if (initialized) return;
+        preferences_path=path ? path : "";
+        if (preferences_path.empty()) return;
+        auto result=LoadPreferences(preferences_path,saved);
+        auto_save=result==LoadResult::Loaded || result==LoadResult::Missing;
+        if (result==LoadResult::Loaded) {
+            theme=saved.theme; wide=saved.wide; sidebar_expanded=saved.sidebar_expanded;
+        } else if (!auto_save) Message("设置读取失败，已使用默认值；原文件会保留，手动保存后才会替换。");
+    }
+    void FlushPreferences(bool exiting) {
+        if (preferences_path.empty() || (!save_requested && !(exiting && auto_save))) return;
+        bool explicit_save=save_requested; save_requested=false;
+        bool ok=SavePreferences(preferences_path,CapturePreferences());
+        if (ok) auto_save=true;
+        if (explicit_save) Message(ok ? "设置已保存" : "保存失败，原设置文件保持不变");
+        else if (!ok) std::fprintf(stderr,"sk-imgui-ui: failed to save preferences\n");
+    }
 
     void Message(const char *text) { snackbar.Show(text); }
     void CatalogueRows(const char *filter, int family = -1) {
@@ -208,12 +238,19 @@ struct Gallery {
                     d->AddCircleFilled(ImVec2(p.x+w*(.12f+.095f*i),p.y+h*(.5f+.23f*std::sin(phase))),skui::Dp(30),
                         ImGui::GetColorU32(ImVec4(.3f+.06f*i,.65f,.95f-.08f*i,1)),32);
                 }
+                std::chrono::steady_clock::time_point effect_start;
+                if(profiler.Enabled()) effect_start=std::chrono::steady_clock::now();
                 glass.Capture(d,p,ImVec2(p.x+w,p.y+h));
                 auto a=ImVec2(p.x+skui::Dp(22),p.y+skui::Dp(36)),b=ImVec2(p.x+w-skui::Dp(22),p.y+h-skui::Dp(36));
                 glass.Draw(a,b,glass_style);
+                if(profiler.Enabled()) profiler.AddEffectTime(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-effect_start).count());
                 d->AddText(ImVec2(a.x+skui::Dp(16),a.y+skui::Dp(28)),IM_COL32_WHITE,"Glass");
                 d->AddText(ImVec2(a.x+skui::Dp(16),a.y+skui::Dp(64)),IM_COL32_WHITE,"流动的背景，柔和的材质");
                 ImGui::Dummy(ImVec2(w,h));
+                if(profiler.Enabled()) {
+                    char timing[80];std::snprintf(timing,sizeof(timing),"Glass CPU: %.3f ms",profiler.Latest().effects_ms);
+                    skui::Caption(timing);
+                }
             } else if(component=="HapticFeedback") {
                 skui::Toggle("触觉反馈",&theme.haptics);
                 if(skui::Button("轻触")) skui::PerformHaptic(skui::Haptic::Press);
@@ -417,7 +454,8 @@ struct Gallery {
                 ImGui::SameLine();
             ImGui::PushID(i);
             bool pressed = false;
-            skui::Swatch("accent", colors[i], accent == i, &pressed);
+            bool selected=std::abs(theme.accent.x-colors[i].x)<.001f && std::abs(theme.accent.y-colors[i].y)<.001f && std::abs(theme.accent.z-colors[i].z)<.001f;
+            skui::Swatch("accent", colors[i], selected, &pressed);
             if (pressed) {
                 accent = i;
                 theme.accent = colors[i];
@@ -537,12 +575,29 @@ struct Gallery {
             skui::Space(10);
             skui::Text("强调色");
             AccentColors();
+            skui::Slider("控件圆角",&theme.tokens.control_radius,0,28,"%.0f");
+            skui::Slider("卡片圆角",&theme.tokens.card_radius,0,32,"%.0f");
+            skui::Slider("文字缩放",&theme.tokens.text_scale,.8f,1.4f,"%.2f");
+            skui::Caption("设计参数统一作用于对应控件；字号变化仍需检查布局。");
             skui::Space(4);
         }
         skui::EndCard();
         skui::Section("布局");
         if (skui::BeginCard("settings-layout")) {
             skui::Toggle("宽屏预览", &wide, "在同一窗口中预览侧栏布局");
+        }
+        skui::EndCard();
+        skui::Section("设置保存与诊断");
+        if (skui::BeginCard("foundation")) {
+            if (preferences_path.empty()) {
+                skui::Caption("启动时传入 --settings <文件路径> 可启用加载与退出保存。");
+            } else if (skui::Button("保存当前设置")) save_requested=true;
+            bool diagnostics=profiler.Enabled();
+            if (skui::Toggle("性能诊断",&diagnostics,"固定 240 帧采样；关闭后停止计时并清空统计")) profiler.SetEnabled(diagnostics);
+            if (diagnostics) {
+                skui::DrawDiagnostics(profiler);
+                if (skui::Button("清空采样",skui::Tone::Neutral)) profiler.Clear();
+            }
         }
         skui::EndCard();
         skui::Section("关于");
@@ -575,7 +630,7 @@ struct Gallery {
         scale = std::clamp(std::min(display.x, display.y) / 490.f, 1.f, 2.6f) * (wide ? .57f : 1.f);
         theme.scale = scale;
         skui::ApplyTheme(theme);
-        ImGui::PushFont(nullptr, skui::Dp(16));
+        ImGui::PushFont(nullptr, skui::TextSize(16));
         const skui::NavItem items[] = {{"组件", skui::Icon::Components},
                                        {"布局", skui::Icon::Layout},
                                        {"导航", skui::Icon::Navigation},
@@ -601,11 +656,16 @@ struct Gallery {
         shell.close_requested = &close;
         shell.content_includes_header = true;
         shell.sidebar_expanded = &sidebar_expanded;
-        shell.initial_position = ImVec2(display.x * .035f, display.y * .065f);
-        shell.initial_size = ImVec2(display.x * .93f, std::min(display.y * .85f, 1850.f));
+        shell.initial_position = ImVec2(display.x * saved.position.x, display.y * saved.position.y);
+        shell.initial_size = ImVec2(display.x * saved.size.x, std::min(display.y * saved.size.y, 1850.f));
         bool visible = skui::BeginShell(shell);
         window_pos = skui::ShellPosition();
         window_size = skui::ShellSize();
+        // Never persist the temporary geometry used to avoid the keyboard.
+        if (keyboard_height<=0 && display.x>0 && display.y>0) {
+            saved.size=ImVec2(std::clamp(window_size.x/display.x,.1f,1.f),std::clamp(window_size.y/display.y,.1f,1.f));
+            saved.position=ImVec2(std::clamp(window_pos.x/display.x,0.f,1-saved.size.x),std::clamp(window_pos.y/display.y,0.f,1-saved.size.y));
+        }
         if (previous != nav)
             router.Reset(paths[nav]);
         if (close)
@@ -654,4 +714,7 @@ Gallery app;
 void Draw(bool *running, ImVec2 display_size, float keyboard_height) { app.Draw(running, display_size, keyboard_height); }
 void Notify(const char *message) { app.Message(message); }
 float FontScale() { return 35.2f; }
+skui::FrameProfiler &Profiler() { return app.profiler; }
+void ConfigurePreferences(const char *path) { app.ConfigurePreferences(path); }
+void FlushPreferences(bool exiting) { app.FlushPreferences(exiting); }
 } // namespace gallery

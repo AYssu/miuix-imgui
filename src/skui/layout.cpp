@@ -9,7 +9,7 @@ namespace {
 ImVec2 At(ImVec2 p, float x, float y) { return ImVec2(p.x+x,p.y+y); }
 ImU32 U(ImVec4 color) { return ImGui::GetColorU32(color); }
 void Label(ImVec2 p, const char *text, float size, ImVec4 color) {
-    if(text) ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(),Dp(size),p,U(color),text);
+    if(text) ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(),TextSize(size),p,U(color),text);
 }
 struct PreferenceRow {
     ImVec2 min,max;
@@ -24,20 +24,20 @@ struct PreferenceRow {
         float feedback=detail::InteractionFeedback(.05f,.12f);
         if(feedback>0) {
             auto color=GetTheme().accent; color.w=feedback;
-            draw->AddRectFilled(min,max,U(color),Dp(14));
+            draw->AddRectFilled(min,max,U(color),Dp(GetTheme().tokens.row_radius));
         }
         float left=Dp(icon==Icon::None ? 2 : 38), right=reserve_end ? Dp(46) : Dp(4);
         if(icon!=Icon::None) DrawIcon(icon,At(min,Dp(17),height/2),Dp(22),U(TextColor()));
         if(value) {
             float width=std::min((max.x-min.x)*.38f,
-                ImGui::GetFont()->CalcTextSizeA(Dp(13),FLT_MAX,0,value).x);
+                ImGui::GetFont()->CalcTextSizeA(TextSize(13),FLT_MAX,0,value).x);
             draw->PushClipRect(ImVec2(max.x-right-width,min.y),At(max,0,0),true);
-            Label(ImVec2(max.x-right-width,min.y+(height-Dp(13))/2),value,13,MutedColor());
+            Label(ImVec2(max.x-right-width,min.y+(height-TextSize(13))/2),value,13,MutedColor());
             draw->PopClipRect(); right+=width+Dp(10);
         }
         draw->PushClipRect(min,ImVec2(std::max(min.x,max.x-right),max.y),true);
         Label(At(min,left,Dp(description ? 12 : 16)),title,16,TextColor());
-        if(description) draw->AddText(ImGui::GetFont(),Dp(12),At(min,left,Dp(38)),
+        if(description) draw->AddText(ImGui::GetFont(),TextSize(12),At(min,left,Dp(38)),
             U(MutedColor()),description,nullptr,std::max(Dp(20),max.x-min.x-left-right));
         draw->PopClipRect();
     }
@@ -79,7 +79,7 @@ bool Navigation(const char *id,const NavItem *items,int count,int *selected,bool
         DrawIcon(items[i].icon,At(p,rail ? Dp(22) : width/2,Dp(rail ? 28 : 18)),Dp(22),U(color));
         if(rail) Label(At(p,Dp(44),Dp(20)),items[i].label,14,color);
         else {
-            auto text=ImGui::GetFont()->CalcTextSizeA(Dp(11),FLT_MAX,0,items[i].label);
+            auto text=ImGui::GetFont()->CalcTextSizeA(TextSize(11),FLT_MAX,0,items[i].label);
             Label(At(p,(width-text.x)/2,Dp(36)),items[i].label,11,color);
         }
         ImGui::PopID();
@@ -88,8 +88,8 @@ bool Navigation(const char *id,const NavItem *items,int count,int *selected,bool
 }
 } // namespace
 bool BeginSurface(const char *id,ImVec2 size,float rounding,ImVec4 color) {
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,Dp(std::max(0.f,rounding)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(Dp(16),Dp(12)));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,Dp(rounding < 0 ? GetTheme().tokens.card_radius : std::max(0.f,rounding)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(Dp(GetTheme().tokens.surface_padding.x),Dp(GetTheme().tokens.surface_padding.y)));
     ImGui::PushStyleColor(ImGuiCol_ChildBg,color.w<0 ? Surface() : color);
     return ImGui::BeginChild(id,size,(size.y==0 ? ImGuiChildFlags_AutoResizeY : 0) |
         ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -143,7 +143,7 @@ void AnchoredBadge(const char *label) {
     auto anchor=ImVec2(max.x-Dp(2),min.y+Dp(4));
     if(!label) draw->AddCircleFilled(anchor,Dp(3),U(red),20);
     else {
-        float text=ImGui::GetFont()->CalcTextSizeA(Dp(10),FLT_MAX,0,label).x;
+        float text=ImGui::GetFont()->CalcTextSizeA(TextSize(10),FLT_MAX,0,label).x;
         float width=std::max(Dp(16),text+Dp(8)),height=Dp(16);
         auto p=At(anchor,-width*.5f,-height*.5f);
         draw->AddRectFilled(p,At(p,width,height),U(red),height/2);
@@ -219,7 +219,7 @@ bool NavigationRail(const char *id,const NavItem *items,int count,int *selected,
         }
         DrawIcon(items[i].icon,At(p,width*.5f*(1-progress)+Dp(22)*progress,Dp(18+10*progress)),Dp(22),U(color));
         float font=11+3*progress;
-        auto text=ImGui::GetFont()->CalcTextSizeA(Dp(font),FLT_MAX,0,items[i].label);
+        auto text=ImGui::GetFont()->CalcTextSizeA(TextSize(font),FLT_MAX,0,items[i].label);
         float x=(width-text.x)*.5f*(1-progress)+Dp(44)*progress;
         draw->PushClipRect(p,At(p,width,height),true);
         Label(At(p,x,Dp(38-18*progress)),items[i].label,font,color);

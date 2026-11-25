@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "skui/router.h"
+#include "skui/theme.h"
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -36,6 +37,8 @@ struct Theme {
     ImVec4 accent{0.20f, 0.48f, 1.0f, 1.0f};
     bool haptics = true;
     float motion_response = .8f, motion_damping = .95f, motion_duration_scale = 1.f;
+    Palette light = DefaultPalette(), dark_palette = DefaultPalette(true);
+    DesignTokens tokens;
 };
 // Analytic spring step response. Parameters use Miuix's normalized duration.
 float SpringProgress(float fraction, float response = .8f, float damping = .95f);
@@ -48,6 +51,21 @@ void PerformHaptic(Haptic event);
 // owns the context, fonts, input and renderer; the library never creates them.
 void ApplyTheme(const Theme &theme);
 const Theme &GetTheme();
+const Palette &Colors();
+float TextSize(float design_size);
+// Rendering-thread scope; keep the same ImGui context and balance every
+// Begin/End and Push/Pop inside it. Restores the complete caller style.
+class ThemeScope {
+  public:
+    explicit ThemeScope(const Theme &theme);
+    ~ThemeScope();
+    ThemeScope(const ThemeScope &) = delete;
+    ThemeScope &operator=(const ThemeScope &) = delete;
+  private:
+    Theme previous_;
+    ImGuiStyle style_;
+    ImGuiContext *context_;
+};
 float Dp(float value);
 ImVec4 Background();
 ImVec4 Surface();
@@ -68,7 +86,7 @@ void Collapsible(const char *id, bool expanded, const std::function<void()> &con
 bool BeginCard(const char *id);
 void EndCard();
 // A customizable container. Always pair with EndSurface, including false.
-bool BeginSurface(const char *id, ImVec2 size = ImVec2(0,0), float rounding = 18,
+bool BeginSurface(const char *id, ImVec2 size = ImVec2(0,0), float rounding = -1,
                   ImVec4 color = ImVec4(0,0,0,-1));
 void EndSurface();
 bool BasicComponent(const char *id, const char *title, const char *description = nullptr,

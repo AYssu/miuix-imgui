@@ -240,8 +240,8 @@ bool GlassBackdrop::Draw(ImVec2 min,ImVec2 max,const GlassStyle &style) {
     }
     // Soft elevation, then the sampled/blurred material, tint and rim.
     for(int i=6;i>0;--i) {
-        float spread=Dp(i);draw->AddRectFilled(ImVec2(min.x-spread,min.y-spread+Dp(3)),ImVec2(max.x+spread,max.y+spread+Dp(3)),
-            ImGui::GetColorU32(ImVec4(0,0,0,.012f)),rounding+spread);
+        float spread=Dp(i*GetTheme().tokens.shadow_size/6);draw->AddRectFilled(ImVec2(min.x-spread,min.y-spread+Dp(3)),ImVec2(max.x+spread,max.y+spread+Dp(3)),
+            ImGui::GetColorU32(ImVec4(0,0,0,GetTheme().tokens.shadow_alpha)),rounding+spread);
     }
     if(!clear) draw->AddImageRounded(s.texture->GetTexRef(),min,max,ImVec2(0,0),ImVec2(1,1),ImGui::GetColorU32(ImVec4(1,1,1,1)),rounding);
     draw->AddRectFilled(min,max,ImGui::GetColorU32(style.tint),rounding);
