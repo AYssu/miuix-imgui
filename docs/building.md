@@ -19,6 +19,11 @@ ctest --test-dir build/host --output-on-failure
 库目标为 `skui::ui` 和 `skui::navigation`，支持 `add_subdirectory` 或安装后的
 `find_package(skui CONFIG REQUIRED)`。安装和移动目录后的验证见 [CMake 包](packaging.md)。
 
+## 桌面 Gallery
+
+可选的 POSIX 桌面 Gallery 使用 SDL2 / OpenGL3，构建与检查见 [桌面宿主](desktop.md)。
+它默认关闭；纯库和 headless 构建保持不依赖桌面 SDK。
+
 ## Android Demo
 
 本地和 CI 参考配置：JDK 17、NDK `28.2.13676358`、SDK platform `36`、

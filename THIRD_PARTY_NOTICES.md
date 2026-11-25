@@ -11,6 +11,7 @@
 | 组件 | 位置/版本 | 许可与说明 |
 | --- | --- | --- |
 | Dear ImGui | include/ImGui 与 src/ImGui；上游 v1.93.0（c1aaac65e896a45f81f47a4d68f9959e0f86c859） | [MIT](LICENSES/Dear-ImGui-MIT.txt)，Omar Cornut；包含平台/渲染后端及 FreeType 适配。my_imgui_impl_android 也包含其 Android 后端派生实现 |
+| SDL2 | 可选桌面 Gallery 的宿主系统依赖，要求 2.0.18+；本仓库不包含 SDL2 实现源码或二进制 | [zlib](LICENSES/SDL2-zlib.txt)，Sam Lantinga；ImGui SDL2 后端属于上行 Dear ImGui MIT 文件 |
 | stb | include/ImGui/imstb_*，include/My_Utils/stb_image，src/My_Utils/stb_image | 采用其双许可中的 [MIT](LICENSES/stb-MIT.txt)，Sean Barrett；原文件末尾保留许可 |
 | ProggyClean | src/ImGui/imgui_draw.cpp 内嵌默认字体 | [MIT](LICENSES/ProggyClean-MIT.txt)，Tristan Grimmer |
 | ProggyForever | src/ImGui/imgui_draw.cpp 内嵌可缩放默认字体 | [MIT](LICENSES/ProggyForever-MIT.txt)，Disco Hello、Tristan Grimmer |

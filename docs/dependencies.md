@@ -10,9 +10,14 @@
   [ProggyClean](../LICENSES/ProggyClean-MIT.txt) 和 [ProggyForever](../LICENSES/ProggyForever-MIT.txt) 的 MIT 许可。
   后者许可原文取自 `ocornut/proggyforever` 提交 `f8868ba43bb42c4d88454d03ad81cbd139789f72` 的 `LICENSE.txt`。
 
-`include/ImGui/` 和 `src/ImGui/` 中的核心、stb、标准 Android/OpenGL/Vulkan 后端及
+`include/ImGui/` 和 `src/ImGui/` 中的核心、stb、标准 Android/SDL2/OpenGL/Vulkan 后端及
 FreeType 适配均取自同一个标签，保持上游文件内容。这里只附带构建需要的源码和头文件，
 不附带上游示例图片、字体文件或工具配置。Android 系统字体在设备端读取。
+
+可选桌面 Gallery 使用宿主 SDL2 2.0.18+ 与 OpenGL，不让纯库 / headless 测试下载依赖。
+SDL2 后端从上述已校验归档中提取，保持原文：`imgui_impl_sdl2.h` SHA-256 为
+`d1d31f18c3375f6208a039c57a590b885e71f6af3565acbc990095fc5a08fb4e`，
+`imgui_impl_sdl2.cpp` 为 `5f2319b0deebad511975517ac6e0b92a0c7dc0878f0213b50b368375310f2736`。
 
 从早期 `1.92.0 WIP` 更新时，项目适配包括：
 

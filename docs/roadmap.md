@@ -31,7 +31,7 @@
 | 第二批 | 可取消的异步加载完整示例 | 已实现：单 worker、进度 / 取消 / 错误 / 重试、generation 排除旧结果、退出 join；最多 10 万条数据回归 |
 | 第三批 | 交互检查、动画调试与高层自动化 | 待实施 |
 | 第三批 | CMake 安装 / 导出 / relocated consumer | 已实现：随库 / 宿主 ImGui、仅路由组件、许可导出、移动目录后的独立消费与失败契约；GCC / Clang 运行验证、Android 交叉编译及原生 consumer 运行 |
-| 第三批 | 可选桌面 Gallery 宿主 | 待实施 |
+| 第三批 | 可选桌面 Gallery 宿主 | 已实现：SDL2 / OpenGL3、复用 Gallery、键盘 / 事件唤醒、闲置等待及生命周期；Linux offscreen 渲染 / 设置回归，CI 增加 Xvfb 检查。其他桌面平台仍未实测 |
 | 第三批 | API 版本、变更、兼容矩阵与发布规范 | 待实施 |
 | 单独评估 | GPU Glass 路径与 CPU 回退 | 待评估 |
 | 单独评估 | 屏幕阅读器、复杂文字与双向排版 | 待评估 |

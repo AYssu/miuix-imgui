@@ -23,6 +23,9 @@ CC=clang CXX=clang++ \
 `check.sh` 接受 `host|sanitizers|consumer` 和可选构建目录，`SKUI_JOBS` 控制并行数。
 不同编译器/检测模式使用不同目录。CI 使用同样入口，不要求 root 或真实显示设备。
 
+可选桌面宿主有独立的 SDL2 / OpenGL CI job，使用 Xvfb / Mesa 运行
+`scripts/check-desktop.py` 检查实际绘制、持久化与退出，见 [桌面 Gallery](desktop.md)。
+
 主机测试使用真实 ImGui 帧及合成输入，覆盖路由、控件事件、禁用/取消点击、缩放、
 拖动/滚动、选择与级联菜单、弹层层级、UTF-8 编辑回填、折叠/侧栏/提示等动画。
 折叠与侧栏已有 30/60/120 Hz 时间步长测试；不是所有动画都已逐一覆盖三种频率。

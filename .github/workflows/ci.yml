@@ -64,6 +64,27 @@ jobs:
           persist-credentials: false
       - run: bash scripts/check.sh sanitizers
 
+  desktop:
+    name: Desktop SDL2 + OpenGL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install desktop development and display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libgl1-mesa-dev fonts-noto-cjk xvfb xauth
+          pkg-config --modversion sdl2
+      - name: Build the optional gallery
+        run: |
+          cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug -DSKUI_BUILD_ANDROID_DEMO=OFF -DSKUI_BUILD_DESKTOP_DEMO=ON
+          cmake --build build/desktop --parallel 4
+      - name: Render and verify shutdown under Xvfb
+        run: |
+          xvfb-run -a env SDL_VIDEODRIVER=x11 LIBGL_ALWAYS_SOFTWARE=1 python3 scripts/check-desktop.py build/desktop/skui-gallery
+
   android:
     name: Android arm64 compile
     runs-on: ubuntu-24.04

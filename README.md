@@ -80,6 +80,9 @@ target_link_libraries(your-app PRIVATE skui::ui skui::navigation)
 | [主题、设置与性能](docs/foundations.md) | 设计参数、局部主题、可选设置保存、固定容量性能采样 |
 | [调度、任务与长列表](docs/runtime.md) | 闲置唤醒、可取消加载、稳定 ID / 滚动锚点、可见行裁剪 |
 | [自适应布局与字体](docs/layout-and-fonts.md) | 安全区域、旋转 / 键盘约束、换列、大字号与翻译、资源所有权 |
+| [键盘与返回](docs/keyboard.md) | 控件导航、编辑 / 弹层 / 页面返回优先级及焦点恢复 |
+| [CMake 包](docs/packaging.md) | 安装 / 导出、移动前缀、宿主 ImGui 与仅路由消费 |
+| [桌面 Gallery](docs/desktop.md) | 可选 SDL2 / OpenGL3 宿主、字体、闲置等待与退出检查 |
 | [CI 工作流](.github/workflows/ci.yml) | GCC/Clang、ASan/UBSan、独立接入及 Android 构建 |
 
 ```text

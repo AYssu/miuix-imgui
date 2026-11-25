@@ -4,6 +4,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 option(SKUI_BUILD_ANDROID_DEMO "Build the native Android floating gallery" ${ANDROID})
+option(SKUI_BUILD_DESKTOP_DEMO "Build the SDL2/OpenGL3 gallery (POSIX host)" OFF)
 option(SKUI_BUILD_TESTS "Build host-side component and navigation tests" OFF)
 option(SKUI_BUILD_BENCHMARKS "Build headless CPU performance probes" OFF)
 option(SKUI_INSTALL "Generate library installation and package exports" ON)
@@ -45,6 +46,21 @@ target_include_directories(skui-navigation INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(skui-navigation INTERFACE cxx_std_17)
+
+if(SKUI_BUILD_DESKTOP_DEMO)
+    if(ANDROID OR NOT UNIX)
+        message(FATAL_ERROR "The desktop gallery currently requires a POSIX desktop host; the UI library has no such dependency")
+    endif()
+    find_package(SDL2 2.0.18 CONFIG REQUIRED)
+    find_package(OpenGL REQUIRED)
+    find_package(Threads REQUIRED)
+    add_executable(skui-gallery
+        examples/desktop/main.cpp examples/gallery/gallery.cpp
+        examples/gallery/preferences.cpp examples/gallery/data_model.cpp
+        src/ImGui/backends/imgui_impl_sdl2.cpp src/ImGui/backends/imgui_impl_opengl3.cpp)
+    target_include_directories(skui-gallery PRIVATE examples/gallery include/ImGui/backends)
+    target_link_libraries(skui-gallery PRIVATE skui::ui SDL2::SDL2 OpenGL::GL Threads::Threads)
+endif()
 
 if(SKUI_BUILD_ANDROID_DEMO)
     if(NOT ANDROID)
