@@ -28,7 +28,7 @@ else()
 endif()
 
 add_library(skui-ui STATIC src/skui/skui.cpp src/skui/components.cpp src/skui/layout.cpp src/skui/overlay.cpp src/skui/navigation.cpp
-    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp src/skui/runtime.cpp)
+    src/skui/window.cpp src/skui/color.cpp src/skui/glass.cpp src/skui/theme.cpp src/skui/diagnostics.cpp src/skui/runtime.cpp src/skui/devtools.cpp)
 add_library(skui::ui ALIAS skui-ui)
 target_include_directories(skui-ui PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -199,6 +199,9 @@ if(SKUI_BUILD_TESTS)
         target_compile_definitions(skui-runtime-tests PRIVATE SKUI_TEST_NATIVE_WAKE)
     endif()
     add_test(NAME skui-runtime-tests COMMAND skui-runtime-tests)
+    add_executable(skui-devtools-tests tests/devtools_tests.cpp)
+    target_link_libraries(skui-devtools-tests PRIVATE skui::ui)
+    add_test(NAME skui-devtools-tests COMMAND skui-devtools-tests)
     add_executable(skui-keyboard-tests tests/keyboard_tests.cpp)
     target_link_libraries(skui-keyboard-tests PRIVATE skui::ui)
     add_test(NAME skui-keyboard-tests COMMAND skui-keyboard-tests)

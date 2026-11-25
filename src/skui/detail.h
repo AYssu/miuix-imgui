@@ -3,6 +3,9 @@
 #include <limits>
 #include <functional>
 namespace skui::detail {
+float MotionDeltaTime();
+double MotionTime();
+void RequestMotionFrame();
 // Per-window, per-ID motion. Reversals start at the currently presented value.
 float Animate(ImGuiID id, float target, float seconds = .22f,
               float initial = std::numeric_limits<float>::quiet_NaN());

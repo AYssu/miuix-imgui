@@ -109,10 +109,10 @@ float Animate(ImGuiID id, float target, float seconds, float initial) {
     if (previous != target) { from = value; elapsed = 0; restarted = true; }
     // Give a new target immediate feedback, but don't fast-forward it by the
     // long interval spent idle before this input arrived.
-    if (last != frame) elapsed += restarted ? std::min(ImGui::GetIO().DeltaTime,1.f/60) : ImGui::GetIO().DeltaTime;
+    if (last != frame) elapsed += restarted ? std::min(MotionDeltaTime(),1.f/60) : MotionDeltaTime();
     float duration=seconds*GetTheme().motion_duration_scale;
     float t = GetTheme().animations && duration > 0 ? std::clamp(elapsed / duration, 0.f, 1.f) : 1.f;
-    if (t<1 && from!=target) RequestAnimationFrame();
+    if (t<1 && from!=target) RequestMotionFrame();
     // Layout reveals keep a gentle start. The navigation spring belongs to
     // page transitions, not short press feedback or collapsing geometry.
     value = t == 1 ? target : ImLerp(from, target, t*t*(3-2*t));
@@ -916,11 +916,11 @@ void Snackbar::Draw(ImVec2 p, float width) {
     double now = ImGui::GetTime();
     bool showing = now < until_;
     if (showing != showing_) { from_ = opacity_; elapsed_ = 0; showing_ = showing; }
-    if (last_draw_ != now) elapsed_ += ImGui::GetIO().DeltaTime;
+    if (last_draw_ != now) elapsed_ += detail::MotionDeltaTime();
     last_draw_ = now;
     float t = GetTheme().animations ? std::clamp(elapsed_/.24f,0.f,1.f) : 1.f;
     opacity_ = ImLerp(from_, showing ? 1.f : 0.f, t*t*(3-2*t));
-    if(t<1 && from_!=(showing ? 1.f : 0.f)) RequestAnimationFrame();
+    if(t<1 && from_!=(showing ? 1.f : 0.f)) detail::RequestMotionFrame();
     if(showing) RequestFrameAfter(until_-now);
     if (opacity_ <= 0) return;
     p.y += Dp(14)*(1-opacity_);

@@ -1,5 +1,6 @@
 #include "skui/skui.h"
 #include "skui/diagnostics.h"
+#include "skui/devtools.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -32,6 +33,20 @@ int main() {
     };
     std::puts("Headless CPU elapsed; 100 warmup / 3000 measured frames, 12 buttons");
     print("ApplyTheme",themes);print("UI frame",frames);
+    for(bool inspect:{false,true}) {
+        skui::SetItemInspectionEnabled(inspect);frames.clear();
+        for(int frame=0;frame<3100;++frame) {
+            auto start=Clock::now();ImGui::NewFrame();ImGui::SetNextWindowSize(ImVec2(600,1000));ImGui::Begin("inspection-benchmark");
+            for(int i=0;i<12;++i) {
+                char path[32];std::snprintf(path,sizeof(path),"benchmark/button/%d",i);ImGui::PushID(i);
+                skui::Button("Theme / performance");skui::InspectLastItem(path);ImGui::PopID();
+            }
+            ImGui::End();ImGui::Render();auto end=Clock::now();
+            if(frame>=100) frames.push_back(std::chrono::duration<double,std::micro>(end-start).count());
+        }
+        std::printf("12 explicit inspection markers enabled=%d ",inspect);print("UI frame",frames);
+    }
+    skui::SetItemInspectionEnabled(false);
     skui::FrameProfiler profiler;
     for(bool enabled:{false,true}) {
         profiler.SetEnabled(enabled);auto start=Clock::now();

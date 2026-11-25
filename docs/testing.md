@@ -134,3 +134,5 @@ Glass 零参数回归补充：GCC / Clang、ASan + UBSan、独立 consumer 与 A
 856×484 背景、9 个圆形的 Release CPU 探针中，Capture + Draw 的中位耗时约为
 零模糊 7.82 ms、模糊 1 时 6.45 ms、模糊 12 时 0.87 ms（逻辑缩放 2.2、折射 0、饱和度 1.2）。
 零模糊 / 零折射 / 饱和度 1 的背景直通约 0.01 ms；这些数值不包含 GPU 上传、提交或整帧耗时。
+
+交互与动画调试回归：`skui-devtools-tests`，说明和可复用驱动见 [开发工具](devtools.md)。

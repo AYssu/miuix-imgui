@@ -1,3 +1,4 @@
+#include "skui/devtools.h"
 #include "gallery.h"
 #include "preferences.h"
 #include "data_model.h"
@@ -95,6 +96,7 @@ struct Gallery {
     skui::TopAppBarState appbar;
     char catalogue_search[96]="";
     skui::FrameProfiler profiler;
+    bool developer_tools=false,show_metrics=false,show_ids=false;
     std::string preferences_path;
     Preferences saved;
     bool save_requested = false, auto_save = false;
@@ -686,8 +688,11 @@ struct Gallery {
         skui::Section("外观");
         if (skui::BeginCard("appearance")) {
             skui::Toggle("深色模式", &theme.dark, "修改后，组件与页面一起更新");
+            skui::InspectLastItem("settings/dark");
             skui::Toggle("交互动画", &theme.animations);
+            skui::InspectLastItem("settings/animations");
             skui::Toggle("触觉反馈", &theme.haptics);
+            skui::InspectLastItem("settings/haptics");
             skui::Divider();
             skui::Space(10);
             skui::Text("强调色");
@@ -715,6 +720,21 @@ struct Gallery {
                 skui::DrawDiagnostics(profiler);
                 if (skui::Button("清空采样",skui::Tone::Neutral)) profiler.Clear();
             }
+        }
+        skui::EndCard();
+        skui::Section("开发工具");
+        if(skui::BeginCard("developer-tools")) {
+            if(skui::Toggle("交互检查",&developer_tools,"仅记录显式标记的控件；关闭后释放记录"))
+                skui::SetItemInspectionEnabled(developer_tools);
+            if(developer_tools) {
+                auto playback=skui::GetAnimationPlayback();
+                bool changed=skui::Toggle("暂停展示动画",&playback.paused);
+                changed|=skui::Slider("动画速度",&playback.speed,.1f,2.f,"%.2fx");
+                if(changed) skui::SetAnimationPlayback(playback);
+                if(skui::Button("推进一帧",skui::Tone::Neutral)) skui::StepAnimations();
+                skui::Caption("真实输入、惯性滚动和任务不暂停；标记范围见开发工具文档。");
+                skui::Toggle("ImGui Metrics",&show_metrics);skui::Toggle("ImGui ID Stack",&show_ids);
+            } else skui::SetAnimationPlayback({});
         }
         skui::EndCard();
         skui::Section("关于");
@@ -831,6 +851,15 @@ struct Gallery {
         snackbar.Draw(ImVec2(window_pos.x + skui::Dp(24), window_pos.y + window_size.y - skui::Dp(132)),
                       window_size.x - skui::Dp(48));
         ImGui::PopFont();
+        if(developer_tools) {
+            ImGui::SetNextWindowSize(ImVec2(460,420),ImGuiCond_FirstUseEver);
+            bool open=true;
+            if(ImGui::Begin("Interaction Inspector",&open)) skui::DrawInteractionInspector();
+            ImGui::End();
+            if(!open) {developer_tools=false;skui::SetItemInspectionEnabled(false);skui::SetAnimationPlayback({});}
+            if(show_metrics) ImGui::ShowMetricsWindow(&show_metrics);
+            if(show_ids) ImGui::ShowIDStackToolWindow(&show_ids);
+        }
     }
 };
 Gallery app;

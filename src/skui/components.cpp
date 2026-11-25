@@ -290,9 +290,9 @@ int ListPopup(const char *id, const PopupItem *items, int count) {
         if(!valid(previous)) previous=-1;
         float elapsed=state->GetFloat(elapsed_key,.24f);
         if(requested!=page) { previous=page;page=requested;elapsed=0; }
-        elapsed+=ImGui::GetIO().DeltaTime;
+        elapsed+=detail::MotionDeltaTime();
         float t=GetTheme().animations ? std::clamp(elapsed/.24f,0.f,1.f) : 1.f;
-        if(t<1) RequestAnimationFrame();
+        if(t<1) detail::RequestMotionFrame();
         float progress=t*t*(3-2*t);
         state->SetInt(display_key,page);state->SetInt(previous_key,previous);
         state->SetFloat(elapsed_key,elapsed);
@@ -678,8 +678,8 @@ void CircularProgress(float fraction, float size) {
     auto center = Offset(p, size / 2, size / 2);
     float radius = size * .4f;
     draw->AddCircle(center, radius, U(MutedColor()), 32, Dp(3));
-    if(fraction<0 && GetTheme().animations) RequestAnimationFrame();
-    float start = fraction < 0 && GetTheme().animations ? static_cast<float>(ImGui::GetTime() * 4) : -IM_PI / 2;
+    if(fraction<0 && GetTheme().animations) detail::RequestMotionFrame();
+    float start = fraction < 0 && GetTheme().animations ? static_cast<float>(detail::MotionTime() * 4) : -IM_PI / 2;
     float end = start + 2 * IM_PI * (fraction < 0 ? .28f : std::clamp(fraction, 0.f, 1.f));
     if (end > start) {
         draw->PathArcTo(center, radius, start, end, 40);
@@ -751,9 +751,9 @@ bool BreadcrumbBar(const char *id, const char *const *labels, int count, int *se
          (ImGui::IsMouseDragging(0,Dp(8)) && std::abs(io.MouseDelta.x)>std::abs(io.MouseDelta.y)));
     if(!highlighted || user_scroll) state->SetBool(active_key,false);
     if(state->GetBool(active_key)) {
-        float elapsed=state->GetFloat(time_key)+io.DeltaTime;state->SetFloat(time_key,elapsed);
+        float elapsed=state->GetFloat(time_key)+detail::MotionDeltaTime();state->SetFloat(time_key,elapsed);
         float t=GetTheme().animations ? std::min(1.f,elapsed/(.26f*GetTheme().motion_duration_scale)) : 1.f;
-        if(t<1) RequestAnimationFrame();
+        if(t<1) detail::RequestMotionFrame();
         ImGui::SetNextWindowScroll(ImVec2(ImLerp(state->GetFloat(from_key),state->GetFloat(target_key),t*t*(3-2*t)),0));
         if(t==1) state->SetBool(active_key,false);
     }

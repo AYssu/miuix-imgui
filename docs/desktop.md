@@ -52,7 +52,7 @@ xvfb-run -a env SDL_VIDEODRIVER=x11 LIBGL_ALWAYS_SOFTWARE=1 \
 
 脚本启动真实 GL Gallery，检查正常有限帧退出、设置重启、损坏文件保留、字体失败和参数校验；
 只清理自己创建的临时文件，超时只停止自己启动的进程。
-组件操作的合成输入回归继续由五组 CTest 承担。
+组件操作的合成输入回归继续由六组 CTest 承担。
 2026-11-25 本地 Linux / SDL2 / Mesa offscreen 已完成绘制和退出检查。
 没有在此宣称 macOS、Windows、所有高 DPI 显示器或桌面输入法已经运行验证；
 当前示例的设置文件实现使用 POSIX，CMake 对非 POSIX 平台明确拒绝启用此示例。
