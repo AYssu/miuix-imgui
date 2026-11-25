@@ -27,20 +27,64 @@ GlassBackdrop::GlassBackdrop():impl_(new Impl) {}
 GlassBackdrop::~GlassBackdrop()=default;
 namespace {
 float Cross(ImVec2 a,ImVec2 b,ImVec2 c) {return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);}
-void Blur(std::vector<ImVec4> &data,int w,int h,int radius) {
-    if(radius<=0) return;
+void Add(ImVec4 &sum,const ImVec4 &p,float weight) {
+    sum.x+=p.x*weight;sum.y+=p.y*weight;sum.z+=p.z*weight;sum.w+=p.w*weight;
+}
+// Area-filter before reducing resolution. Point-sampling thin shapes directly
+// into the small blur buffer aliases them into moving bands and checkerboards.
+void Reduce(std::vector<ImVec4> &data,int w,int h,int width,int height) {
+    for(int axis=0;axis<2;++axis) {
+        int length=axis ? h : w,target=axis ? height : width;
+        if(target==length) continue;
+        int lines=axis ? w : h;
+        std::vector<ImVec4> out(lines*target);
+        float step=static_cast<float>(length)/target;
+        for(int line=0;line<lines;++line) for(int i=0;i<target;++i) {
+            float lo=i*step,hi=std::min(static_cast<float>(length),(i+1)*step);ImVec4 sum{};
+            for(int j=static_cast<int>(lo);j<static_cast<int>(std::ceil(hi));++j)
+                Add(sum,data[axis ? j*w+line : line*w+j],(std::min(hi,j+1.f)-std::max(lo,static_cast<float>(j)))/step);
+            out[axis ? i*w+line : line*target+i]=sum;
+        }
+        data.swap(out);if(axis) h=height;else w=width;
+    }
+}
+void Blur(std::vector<ImVec4> &data,int w,int h,float sigma) {
+    if(sigma<=0) return;
+    // Three separable boxes approximate a Gaussian. Fractionally weighted
+    // outer taps match its variance continuously, including below one pixel.
+    float variance=std::min(sigma*sigma,1024.f)/3;
+    int radius=static_cast<int>((std::sqrt(1+12*variance)-1)/2);
+    float edge=std::clamp((2*radius+1)*(variance-radius*(radius+1)/3.f)/
+        (2*((radius+1)*(radius+1)-variance)),0.f,1.f);
+    float norm=1.f/(radius*2+1+2*edge);
     std::vector<ImVec4> temp(data.size());
     for(int pass=0;pass<3;++pass) for(int axis=0;axis<2;++axis) {
-        int lines=axis ? w : h,length=axis ? h : w;
-        auto index=[&](int line,int v) {return axis ? v*w+line : line*w+v;};
-        for(int line=0;line<lines;++line) {
+        if(axis) {
+            // Walk rows in memory order instead of striding an entire column
+            // per pixel. Keep one running sum per column for the vertical pass.
+            std::vector<ImVec4> sums(w);
+            for(int i=-radius;i<=radius;++i) for(int x=0;x<w;++x)
+                Add(sums[x],data[std::clamp(i,0,h-1)*w+x],1);
+            for(int y=0;y<h;++y) {
+                int lo=std::clamp(y-radius-1,0,h-1)*w,hi=std::clamp(y+radius+1,0,h-1)*w;
+                int leaving=std::clamp(y-radius,0,h-1)*w;
+                for(int x=0;x<w;++x) {
+                    auto filtered=sums[x];Add(filtered,data[lo+x],edge);Add(filtered,data[hi+x],edge);
+                    temp[y*w+x]=ImVec4(filtered.x*norm,filtered.y*norm,filtered.z*norm,filtered.w*norm);
+                    Add(sums[x],data[leaving+x],-1);Add(sums[x],data[hi+x],1);
+                }
+            }
+            data.swap(temp);continue;
+        }
+        for(int line=0;line<h;++line) {
+            auto index=[&](int x) {return line*w+std::clamp(x,0,w-1);};
             ImVec4 sum{};
-            auto add=[&](const ImVec4 &p,float sign) {sum.x+=p.x*sign;sum.y+=p.y*sign;sum.z+=p.z*sign;sum.w+=p.w*sign;};
-            for(int i=-radius;i<=radius;++i) add(data[index(line,std::clamp(i,0,length-1))],1);
-            for(int i=0;i<length;++i) {
-                float n=1.f/(radius*2+1);temp[index(line,i)]=ImVec4(sum.x*n,sum.y*n,sum.z*n,sum.w*n);
-                add(data[index(line,std::clamp(i-radius,0,length-1))],-1);
-                add(data[index(line,std::clamp(i+radius+1,0,length-1))],1);
+            for(int i=-radius;i<=radius;++i) Add(sum,data[index(i)],1);
+            for(int i=0;i<w;++i) {
+                auto filtered=sum;
+                Add(filtered,data[index(i-radius-1)],edge);Add(filtered,data[index(i+radius+1)],edge);
+                temp[line*w+i]=ImVec4(filtered.x*norm,filtered.y*norm,filtered.z*norm,filtered.w*norm);
+                Add(sum,data[index(i-radius)],-1);Add(sum,data[index(i+radius+1)],1);
             }
         }
         data.swap(temp);
@@ -134,23 +178,26 @@ bool GlassBackdrop::Draw(ImVec2 min,ImVec2 max,const GlassStyle &style) {
         s.vertices.Size==draw->VtxBuffer.Size && s.indices.Size==draw->IdxBuffer.Size &&
         min.x>=s.min.x && min.y>=s.min.y && max.x<=s.max.x && max.y<=s.max.y;
     if(!clear) {
-        // Small/zero blur needs native pixels. Only lower the resolution when the
-        // requested blur can hide that reduction; retain the old 192px floor.
+        // Rasterize at bounded native density, then filter down to a blur grid.
+        // Four samples per blur radius keep broad gradients smooth on upscale.
         auto fb=ImGui::GetIO().DisplayFramebufferScale;
         float density=std::max(1.f,std::max(fb.x,fb.y));
         float longest=std::max(s.max.x-s.min.x,s.max.y-s.min.y);
-        float ratio=blur>0 ? std::min(density,std::max(192.f/longest,2.f/blur)) : density;
         // Bound both capture and output to 1M pixels and a 2048px side.
         float area=std::max((s.max.x-s.min.x)*(s.max.y-s.min.y),(max.x-min.x)*(max.y-min.y));
         float side=std::max(longest,std::max(max.x-min.x,max.y-min.y));
-        ratio=std::min({ratio,2048.f/side,std::sqrt(1048576.f/area)});
-        s.width=std::max(1,static_cast<int>((s.max.x-s.min.x)*ratio));
-        s.height=std::max(1,static_cast<int>((s.max.y-s.min.y)*ratio));
+        density=std::min({density,2048.f/side,std::sqrt(1048576.f/area)});
+        float ratio=blur>0 ? std::min(density,std::max(192.f/longest,4.f/blur)) : density;
+        s.width=std::max(1,static_cast<int>((s.max.x-s.min.x)*density));
+        s.height=std::max(1,static_cast<int>((s.max.y-s.min.y)*density));
         int width=std::max(1,static_cast<int>((max.x-min.x)*ratio));
         int height=std::max(1,static_cast<int>((max.y-min.y)*ratio));
         s.Rasterize();
-        int radius=std::clamp(static_cast<int>(blur*s.width/(s.max.x-s.min.x)/2),0,32);
-        Blur(s.pixels,s.width,s.height,radius);
+        int sample_width=std::max(1,static_cast<int>((s.max.x-s.min.x)*ratio));
+        int sample_height=std::max(1,static_cast<int>((s.max.y-s.min.y)*ratio));
+        Reduce(s.pixels,s.width,s.height,sample_width,sample_height);
+        s.width=sample_width;s.height=sample_height;
+        Blur(s.pixels,s.width,s.height,blur*s.width/(s.max.x-s.min.x)/2);
         if(!s.texture) {
             s.texture=IM_NEW(ImTextureData)();s.texture->UseColors=true;
             s.texture->Create(ImTextureFormat_RGBA32,width,height);s.atlas->TexList.push_back(s.texture);
@@ -160,23 +207,31 @@ bool GlassBackdrop::Draw(ImVec2 min,ImVec2 max,const GlassStyle &style) {
             s.texture->Create(ImTextureFormat_RGBA32,width,height);s.atlas->TexList.push_back(s.texture);
         }
         auto *out=s.texture->Pixels;
-        for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
-            float u=(x+.5f)/width,v=(y+.5f)/height;
-            float qx=2*u-1,qy=2*v-1;
-            float px=min.x+u*(max.x-min.x)+qx*bend*std::abs(qx*qx*qx);
-            float py=min.y+v*(max.y-min.y)+qy*bend*std::abs(qy*qy*qy);
-            float sx=(px-s.min.x)/(s.max.x-s.min.x)*s.width-.5f;
-            float sy=(py-s.min.y)/(s.max.y-s.min.y)*s.height-.5f;
-            int ix=static_cast<int>(std::floor(sx)),iy=static_cast<int>(std::floor(sy));
-            float fx=sx-ix,fy=sy-iy;
-            auto at=[&](int x,int y){return s.pixels[std::clamp(y,0,s.height-1)*s.width+std::clamp(x,0,s.width-1)];};
-            auto a=at(ix,iy),b=at(ix+1,iy),c0=at(ix,iy+1),d=at(ix+1,iy+1);
-            ImVec4 c;
-            for(int k=0;k<4;++k) (&c.x)[k]=((&a.x)[k]*(1-fx)+(&b.x)[k]*fx)*(1-fy)+((&c0.x)[k]*(1-fx)+(&d.x)[k]*fx)*fy;
-            if(c.w>1e-6f) {c.x/=c.w;c.y/=c.w;c.z/=c.w;}
-            float gray=.2126f*c.x+.7152f*c.y+.0722f*c.z;
-            float values[]={gray+(c.x-gray)*saturation,gray+(c.y-gray)*saturation,gray+(c.z-gray)*saturation,c.w};
-            for(int k=0;k<4;++k) out[(y*width+x)*4+k]=static_cast<unsigned char>(std::clamp(values[k],0.f,1.f)*255+.5f);
+        struct Sample {int lo,hi;float fraction;};
+        auto coordinate=[&](int i,int length,float lo,float hi,float origin,float extent,int samples) {
+            float u=(i+.5f)/length,q=2*u-1;
+            float p=lo+u*(hi-lo)+q*bend*std::abs(q*q*q);
+            float v=(p-origin)/extent*samples-.5f;int base=static_cast<int>(std::floor(v));
+            return Sample{std::clamp(base,0,samples-1),std::clamp(base+1,0,samples-1),v-base};
+        };
+        // Refraction is separable. Resolve coordinates once per row/column,
+        // rather than repeating divisions and edge clamps for every channel.
+        std::vector<Sample> columns(width);
+        for(int x=0;x<width;++x) columns[x]=coordinate(x,width,min.x,max.x,s.min.x,s.max.x-s.min.x,s.width);
+        for(int y=0;y<height;++y) {
+            auto row=coordinate(y,height,min.y,max.y,s.min.y,s.max.y-s.min.y,s.height);
+            auto *upper=s.pixels.data()+row.lo*s.width,*lower=s.pixels.data()+row.hi*s.width;
+            float fy=row.fraction;
+            for(int x=0;x<width;++x) {
+                auto column=columns[x];float fx=column.fraction;
+                auto a=upper[column.lo],b=upper[column.hi],c0=lower[column.lo],d=lower[column.hi];
+                ImVec4 c;
+                for(int k=0;k<4;++k) (&c.x)[k]=((&a.x)[k]*(1-fx)+(&b.x)[k]*fx)*(1-fy)+((&c0.x)[k]*(1-fx)+(&d.x)[k]*fx)*fy;
+                if(c.w>1e-6f) {c.x/=c.w;c.y/=c.w;c.z/=c.w;}
+                float gray=.2126f*c.x+.7152f*c.y+.0722f*c.z;
+                float values[]={gray+(c.x-gray)*saturation,gray+(c.y-gray)*saturation,gray+(c.z-gray)*saturation,c.w};
+                for(int k=0;k<4;++k) out[(y*width+x)*4+k]=static_cast<unsigned char>(std::clamp(values[k],0.f,1.f)*255+.5f);
+            }
         }
         if(s.texture->Status==ImTextureStatus_OK) {
             s.texture->Updates.resize(1);s.texture->Updates[0]={0,0,static_cast<unsigned short>(width),static_cast<unsigned short>(height)};

@@ -207,7 +207,8 @@ struct GlassStyle {
 };
 // Capture the already drawn background before painting glass, excluding the
 // glass itself. Capture and Draw must run in the same frame/rendering thread.
-// Sampling adapts to blur, up to native density (bounded to 1M pixels / 2048px).
+// Native-density capture is area-filtered before adaptive blur downsampling
+// (bounded to 1M pixels / 2048px); fractional strength avoids integer jumps.
 class GlassBackdrop {
   public:
     GlassBackdrop();

@@ -212,6 +212,54 @@ void ClearGlass() {
     CHECK(material->Width<=2048 && material->Height<=2048 && material->Width*material->Height<=1048576);
     std::puts("PASS clear Glass: 1px detail, cropped coordinates, neutral passthrough, frozen capture and framebuffer scale");
 }
+void GlassBlurQuality() {
+    Frame f;skui::GlassBackdrop glass;skui::GlassStyle style;
+    style.refraction=0;style.saturation=1;style.tint=ImVec4(0,0,0,0);style.rounding=0;
+    bool stripes=false,horizontal=false;float phase=0;
+    auto draw=[&] {
+        auto *d=ImGui::GetWindowDrawList();auto p=ImGui::GetCursorScreenPos();
+        auto end=ImVec2(p.x+(horizontal ? 80 : 460),p.y+(horizontal ? 460 : 80));
+        d->AddRectFilled(p,end,IM_COL32_BLACK);
+        if(stripes) {
+            for(int x=-2;x<462;x+=2) {
+                auto a=horizontal ? ImVec2(p.x,p.y+x+phase) : ImVec2(p.x+x+phase,p.y);
+                auto b=horizontal ? ImVec2(end.x,p.y+x+phase+1) : ImVec2(p.x+x+phase+1,end.y);
+                d->AddRectFilled(a,b,IM_COL32_WHITE);
+            }
+        } else d->AddRectFilled(p,horizontal ? ImVec2(end.x,p.y+230) : ImVec2(p.x+230,end.y),IM_COL32_WHITE);
+        CHECK(glass.Capture(d,p,end));CHECK(glass.Draw(p,end,style));
+    };
+    auto row=[&] {
+        auto *t=ImGui::GetIO().Fonts->TexList.back();std::vector<float> values;
+        for(int x=0;x<460;++x) {
+            int length=horizontal ? t->Height : t->Width;
+            float sx=(x+.5f)*length/460-.5f;int ix=static_cast<int>(std::floor(sx));float a=sx-ix;
+            auto at=[&](int i){
+                i=std::clamp(i,0,length-1);
+                return static_cast<unsigned char *>(t->GetPixelsAt(horizontal ? t->Width/2 : i,horizontal ? i : t->Height/2))[0];
+            };
+            values.push_back(at(ix)*(1-a)+at(ix+1)*a);
+        }
+        return values;
+    };
+    for(bool axis:{false,true}) for(float scale:{1.f,2.2f}) for(float density:{1.f,2.f}) {
+        horizontal=axis;f.theme.scale=scale;ImGui::GetIO().DisplayFramebufferScale=ImVec2(density,density);stripes=false;
+        for(float threshold:{1.f,2.f,3.f,4.f,6.f,8.f,12.f}) {
+            style.blur=threshold-.01f;f.Draw(draw);auto before=row();
+            style.blur=threshold+.01f;f.Draw(draw);auto after=row();
+            for(int x=30;x<430;++x) CHECK(std::abs(before[x]-after[x])<5);
+        }
+        stripes=true;
+        for(float blur:{4.f,6.f,10.f,16.f,24.f}) {
+            style.blur=blur;
+            for(float offset:{0.f,.25f,.5f,.75f}) {
+                phase=offset;f.Draw(draw);auto pixels=row();
+                for(int x=30;x<430;++x) CHECK(std::abs(pixels[x]-127.5f)<8);
+            }
+        }
+    }
+    std::puts("PASS Glass blur: continuous strength and phase-stable filtering of fine background detail");
+}
 void Haptics() {
     Frame f;int events=0;skui::SetHapticHandler([](skui::Haptic,void *p){++*static_cast<int *>(p);},&events);
     skui::ApplyTheme(f.theme);skui::PerformHaptic(skui::Haptic::Selection);CHECK(events==1);
@@ -247,4 +295,4 @@ void PerceptualPicker() {
     std::puts("PASS perceptual picker: same-frame preview, alpha preservation, gamut/hue slider stability and external synchronization");
 }
 }
-int main() {Colors();SpringsAndHeader();Windows();Glass();ClearGlass();Haptics();PerceptualPicker();}
+int main() {Colors();SpringsAndHeader();Windows();Glass();ClearGlass();GlassBlurQuality();Haptics();PerceptualPicker();}
