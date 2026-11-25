@@ -79,6 +79,11 @@ void Registry() {
     CHECK(skui::FindInspectedItem("item/127",item) && !item.visible);
     for(int i=0;i<100;++i) {ImGui::GetIO().AddMousePosEvent(30.f+i,45);host.Frame([]{});}
     CHECK(skui::GetInspectionStatistics().input_events==64);CHECK(!skui::FindInspectedItem("item/0",item));
+    for(int i=0;i<3;++i) host.Frame([&] {
+        skui::Button("inspector target");CHECK(skui::InspectLastItem("inspector/target"));
+        skui::DrawInteractionInspector();
+    });
+    CHECK(skui::GetInspectionStatistics().count==1);
     auto *other=ImGui::CreateContext();ImGui::SetCurrentContext(other);
     CHECK(!skui::ItemInspectionEnabled());skui::SetItemInspectionEnabled(true);
     ImGui::DestroyContext(other);ImGui::SetCurrentContext(host.context);CHECK(skui::ItemInspectionEnabled());
