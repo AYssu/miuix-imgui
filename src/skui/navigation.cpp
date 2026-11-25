@@ -8,6 +8,7 @@
 
 namespace skui {
 namespace {
+const ImGuiID focus_window_key=ImHashStr("skui/router/focus-window");
 using Texture = std::shared_ptr<ImTextureData>;
 struct DeleteMesh {
     std::vector<Texture> textures;
@@ -243,7 +244,7 @@ struct RouterView::Impl {
     CornerClip corners;
     ImRect bounds;
     float elapsed=0, old_dx=0, old_alpha=1, old_dim=0;
-    bool moving=false;
+    bool moving=false,focus_pending=false;
     void Stop() { moving=false; outgoing.clear(); }
 };
 
@@ -262,6 +263,10 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
     if(size.y<=0) size.y=std::max(1.f,available.y+size.y);
     ImRect bounds(min,ImVec2(min.x+size.x,min.y+size.y));
     bool changed=s.page && s.revision!=router.Revision();
+    auto *previous=ImGui::FindWindowByID(s.page);
+    bool transfer_focus=changed && previous && GImGui->NavWindow &&
+        ImGui::IsWindowChildOf(GImGui->NavWindow,previous,true);
+    if(transfer_focus) s.focus_pending=true;
     bool continuous=s.frame==GImGui->FrameCount-1 &&
                     std::abs(s.bounds.GetWidth()-size.x)<1 && std::abs(s.bounds.GetHeight()-size.y)<1;
     if(changed) {
@@ -345,6 +350,14 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
         if(visible) router.DrawBefore([&](const Route &entry) {
             if(header) header(entry);
             BeginScroll("content");content_open=true;
+            if(!s.moving && s.focus_pending && GImGui->OpenPopupStack.empty()) {
+                // Stable page windows already retain ImGui's last focus and
+                // scroll. Transfer before submission so a new page can init.
+                auto *target=ImGui::FindWindowByID(static_cast<ImGuiID>(page->StateStorage.GetInt(focus_window_key)));
+                if(!target || !ImGui::IsWindowChildOf(target,page,true)) target=ImGui::GetCurrentWindow();
+                ImGui::FocusWindow(target);
+                ImGui::NavInitWindow(GImGui->NavWindow,false);s.focus_pending=false;
+            }
         });
         else {BeginScroll("content");content_open=true;}
     } catch(...) {
@@ -353,6 +366,14 @@ void RouterView::Draw(Router &router, ImVec2 size, const Router::Page &header) {
         s.Stop(); s.page=0;
         throw;
     }
+    if(!s.moving && rendered_revision==router.Revision() && router.CanGoBack() &&
+       (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard) &&
+       GImGui->OpenPopupStack.empty() && GImGui->ActiveId==0 && GImGui->ActiveIdPreviousFrame==0 &&
+       (ImGui::Shortcut(ImGuiKey_Escape) || ImGui::Shortcut(ImGuiMod_Alt|ImGuiKey_LeftArrow)))
+        router.Back();
+    if(GImGui->NavWindow && !(GImGui->NavWindow->RootWindow->Flags & ImGuiWindowFlags_Popup) &&
+       ImGui::IsWindowChildOf(GImGui->NavWindow,page,true))
+        page->StateStorage.SetInt(focus_window_key,static_cast<int>(GImGui->NavWindow->ID));
     if(content_open) EndScroll();
     ImGui::EndDisabled(); ImGui::EndChild();
     if(s.moving) TransformPage(page,incoming_dx,incoming_alpha,bounds);

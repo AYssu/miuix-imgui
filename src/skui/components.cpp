@@ -13,6 +13,45 @@ namespace skui {
 namespace {
 ImU32 U(ImVec4 color) { return ImGui::GetColorU32(color); }
 ImVec2 Offset(ImVec2 p, float x, float y) { return ImVec2(p.x + x, p.y + y); }
+// Persistent keyboard editing, like ImGui sliders: activation enters/leaves
+// edit mode, arrows are owned while editing, Escape ends only this edit.
+bool EditNavigation(ImGuiID id, unsigned directions) {
+    auto &g=*GImGui;
+    if(g.LastItemData.ItemFlags & ImGuiItemFlags_Disabled) return false;
+    if(g.NavActivateId==id) {
+        if(g.ActiveId==id && !g.ActiveIdIsJustActivated) ImGui::ClearActiveID();
+        else if(g.ActiveId!=id) {
+            ImGui::SetActiveID(id,ImGui::GetCurrentWindow());
+            ImGui::SetFocusID(id,ImGui::GetCurrentWindow());
+            ImGui::FocusWindow(ImGui::GetCurrentWindow());
+        }
+    }
+    bool editing=g.ActiveId==id && (g.ActiveIdSource==ImGuiInputSource_Keyboard ||
+                                  g.ActiveIdSource==ImGuiInputSource_Gamepad);
+    if(editing) {
+        g.ActiveIdUsingNavDirMask|=directions;
+        if(ImGui::Shortcut(ImGuiKey_Escape,ImGuiInputFlags_None,id)) {
+            ImGui::ClearActiveID();return false;
+        }
+    }
+    return editing;
+}
+bool EditArea(const char *label,ImVec2 size,unsigned directions) {
+    auto *window=ImGui::GetCurrentWindow();
+    auto id=window->GetID(label);
+    ImRect bb(window->DC.CursorPos,Offset(window->DC.CursorPos,size.x,size.y));
+    ImGui::ItemSize(size);
+    if(!ImGui::ItemAdd(bb,id)) return false;
+    bool hovered=ImGui::ItemHoverable(bb,id,GImGui->LastItemData.ItemFlags);
+    if(hovered && ImGui::IsMouseClicked(0,ImGuiInputFlags_None,id)) {
+        ImGui::SetActiveID(id,window);ImGui::SetFocusID(id,window);ImGui::FocusWindow(window);
+        GImGui->ActiveIdMouseButton=0;
+        ImGui::SetKeyOwner(ImGuiKey_MouseLeft,id);
+    }
+    if(GImGui->ActiveId==id && GImGui->ActiveIdSource==ImGuiInputSource_Mouse && !ImGui::IsMouseDown(0))
+        ImGui::ClearActiveID();
+    return EditNavigation(id,directions);
+}
 void ColorPreview(ImDrawList *draw, ImVec2 min, ImVec2 max, ImVec4 color) {
     if(color.w>=1.f)
         draw->AddRectFilled(min,max,U(color),Dp(12));
@@ -33,6 +72,7 @@ bool Choice(const ChoiceItem &item, bool selected, int index) {
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0,0,0,0));
     bool pressed = ImGui::Selectable("##choice", selected, ImGuiSelectableFlags_NoAutoClosePopups,
                                      ImVec2(0, height));
+    if(selected && item.enabled) ImGui::SetItemDefaultFocus();
     ImGui::PopStyleColor(3);
     detail::AllowScroll();
     auto *draw = ImGui::GetWindowDrawList();
@@ -107,7 +147,7 @@ bool Select(const char *label, int *selected, const ChoiceItem *items, int count
     bool changed = false;
     if (dialog) {
         if (BeginDialog("##choices", label)) {
-            BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)));
+            detail::BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)),false,0,ImGuiChildFlags_NavFlattened);
             for (int i = 0; i < count; ++i)
                 if (Choice(items[i], *selected == i, i)) {
                     changed = *selected != i;
@@ -122,7 +162,7 @@ bool Select(const char *label, int *selected, const ChoiceItem *items, int count
         PopupSize(width, count);
         PlaceChoices(anchor, ImGui::GetItemRectMax(), ChoicesHeight(items, count));
         if (BeginListPopup("##choices")) {
-            BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)));
+            detail::BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)),false,0,ImGuiChildFlags_NavFlattened);
             for (int i = 0; i < count; ++i)
                 if (Choice(items[i], *selected == i, i)) {
                     changed = *selected != i;
@@ -165,8 +205,7 @@ void BeginFloating(const char *id, ImVec2 position, float opacity, bool inert) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, Dp(26));
     ImGui::PushStyleColor(ImGuiCol_WindowBg, Surface());
     ImGui::Begin(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-                             ImGuiWindowFlags_NoNav);
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
     // Focusing the underlying page brings its root forward. Keep floating
     // controls above that page while preserving popup/modal ordering.
     auto *window = ImGui::GetCurrentWindow();
@@ -202,7 +241,7 @@ bool MultiSelect(const char *label, bool *selected, const ChoiceItem *items, int
     PlaceChoices(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), ChoicesHeight(items, count) + Dp(60));
     bool changed = false;
     if (BeginListPopup("##choices")) {
-        BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)));
+        detail::BeginScroll("options", ImVec2(0, ChoicesHeight(items, count)),false,0,ImGuiChildFlags_NavFlattened);
         for (int i = 0; i < count; ++i)
             if (Choice(items[i], selected[i], i)) {
                 selected[i] = !selected[i];
@@ -315,9 +354,29 @@ bool RangeSlider(const char *label, float *lower, float *upper, float minimum, f
         if (state->GetInt(key) == 0) low = std::min(value, high);
         else high = std::max(value, low);
     }
+    // Two independent focus stops share the pointer track. Keep nearest-thumb
+    // touch dragging unchanged, including when the handles overlap.
+    auto pointer_item=GImGui->LastItemData;
+    if((low!=*lower || high!=*upper) && (GImGui->ActiveId==pointer_item.ID || !GImGui->ActiveId))
+        ImGui::MarkItemEdited(pointer_item.ID);
+    for(int thumb=0;thumb<2;++thumb) {
+        float &value=thumb==0 ? low : high;
+        float previous=value;
+        ImGuiID id=ImGui::GetID(thumb==0 ? "lower" : "upper");
+        ImRect handle(Offset(p,x(value)-p.x-r,0),Offset(p,x(value)-p.x+r,Dp(42)));
+        if(ImGui::ItemAdd(handle,id) && EditNavigation(id,(1<<ImGuiDir_Left)|(1<<ImGuiDir_Right))) {
+            ImRect grab;
+            ImGui::SliderBehavior(ImRect(p,Offset(p,width,Dp(42))),id,ImGuiDataType_Float,
+                &value,&minimum,&maximum,"%.3f",ImGuiSliderFlags_NoRoundToFormat,&grab);
+            value=thumb==0 ? std::min(value,high) : std::max(value,low);
+            if(value!=previous) ImGui::MarkItemEdited(id);
+        }
+        ImGui::RenderNavCursor(handle,id);
+    }
+    GImGui->LastItemData=pointer_item;
     bool changed = low != *lower || high != *upper;
     *lower = low; *upper = high;
-    if (changed) ImGui::MarkItemEdited(ImGui::GetItemID());
+    if (changed) GImGui->LastItemData.StatusFlags|=ImGuiItemStatusFlags_Edited;
     auto *draw = ImGui::GetWindowDrawList();
     float cy = p.y + Dp(21);
     draw->AddLine(ImVec2(p.x + r, cy), ImVec2(p.x + width - r, cy), U(MutedColor()), Dp(5));
@@ -339,7 +398,7 @@ bool NumberPicker(const char *label, int *value, int minimum, int maximum, int s
     double index = (std::clamp<std::int64_t>(*value,minimum,maximum)-minimum)/step;
     float row = Dp(40);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
-    ImGui::BeginChild("wheel",ImVec2(0,row*5),0,
+    ImGui::BeginChild("wheel",ImVec2(0,row*5),ImGuiChildFlags_NavFlattened,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     auto *window = ImGui::GetCurrentWindow();
     auto &state = window->StateStorage;
@@ -359,8 +418,9 @@ bool NumberPicker(const char *label, int *value, int minimum, int maximum, int s
     state.SetBool(init_key,true);
     auto p = ImGui::GetCursorScreenPos();
     float width = ImGui::GetContentRegionAvail().x;
-    ImGui::InvisibleButton("##wheel-drag",ImVec2(width,row*5));
-    bool active = ImGui::IsItemActive(), released = ImGui::IsItemDeactivated();
+    bool editing=EditArea("##wheel-drag",ImVec2(width,row*5),(1<<ImGuiDir_Up)|(1<<ImGuiDir_Down));
+    auto wheel_item=GImGui->LastItemData;
+    bool active = ImGui::IsItemActive(), released = ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(0);
     bool hovered = ImGui::IsItemHovered();
     ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
     auto &io = ImGui::GetIO();
@@ -368,6 +428,12 @@ bool NumberPicker(const char *label, int *value, int minimum, int maximum, int s
     double last = static_cast<double>(count-1);
     if (!disabled) {
         if (ImGui::IsItemActivated()) { velocity = 0; snapping = false; }
+        if(editing) {
+            double delta=-ImGui::GetNavTweakPressedAmount(ImGuiAxis_Y);
+            if(ImGui::IsKeyDown(ImGuiKey_NavKeyboardTweakFast)) delta*=10;
+            position=std::clamp(std::round(position)+delta,0.0,last);
+            velocity=0;snapping=false;
+        }
         if (active && ImGui::IsMouseDragging(0,Dp(3))) {
             float delta = -io.MouseDelta.y/row;
             position = std::clamp(position+delta,0.0,last);
@@ -435,6 +501,12 @@ bool NumberPicker(const char *label, int *value, int minimum, int maximum, int s
     }
     draw->PopClipRect();
     *value = static_cast<int>(static_cast<std::int64_t>(minimum)+static_cast<std::int64_t>(index)*step);
+    ImGui::RenderNavCursor(wheel_item.Rect,wheel_item.ID);
+    if(*value!=original) {
+        if(!GImGui->ActiveId || GImGui->ActiveId==wheel_item.ID || GImGui->ActiveIdPreviousFrame==wheel_item.ID)
+            ImGui::MarkItemEdited(wheel_item.ID);
+        else GImGui->LastItemData.StatusFlags|=ImGuiItemStatusFlags_Edited;
+    }
     state.SetInt(key,*value); state.SetFloat(pos_key,static_cast<float>(position-index)); state.SetFloat(vel_key,velocity);
     state.SetBool(snap_key,snapping);
     ImGui::EndChild(); ImGui::PopStyleVar(); ImGui::PopID();
@@ -537,7 +609,9 @@ bool ColorPalette(const char *id, ImVec4 *color) {
     auto preview=ImGui::GetCursorScreenPos(); float preview_height=Dp(36);
     ImGui::Dummy(ImVec2(width,preview_height));
     auto p=ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("grid",ImVec2(width,cell*7));
+    bool editing=EditArea("grid",ImVec2(width,cell*7),(1<<ImGuiDir_Left)|(1<<ImGuiDir_Right)|
+                         (1<<ImGuiDir_Up)|(1<<ImGuiDir_Down));
+    auto grid_item=GImGui->LastItemData;
     bool changed=false;
     auto sample=[](int x,int y) {
         float saturation=y<3 ? (y+1)/4.f : 1.f;
@@ -547,6 +621,26 @@ bool ColorPalette(const char *id, ImVec4 *color) {
         else ImGui::ColorConvertHSVtoRGB(x/12.f,saturation,value,result.x,result.y,result.z);
         return result;
     };
+    if(editing) {
+        auto *state=ImGui::GetStateStorage();auto key=ImGui::GetID("keyboard-cell");
+        int index=state->GetInt(key);
+        if(ImGui::IsItemActivated()) {
+            float closest=FLT_MAX;
+            for(int i=0;i<91;++i) {
+                auto c=sample(i%13,i/13);
+                float d=std::abs(c.x-color->x)+std::abs(c.y-color->y)+std::abs(c.z-color->z);
+                if(d<closest) {closest=d;index=i;}
+            }
+        }
+        int dx=static_cast<int>(ImGui::GetNavTweakPressedAmount(ImGuiAxis_X));
+        int dy=static_cast<int>(ImGui::GetNavTweakPressedAmount(ImGuiAxis_Y));
+        int x=std::clamp(index%13+dx,0,12),y=std::clamp(index/13+dy,0,6);
+        index=y*13+x;state->SetInt(key,index);
+        if(dx || dy) {
+            auto next=sample(x,y);next.w=color->w;
+            changed=next.x!=color->x || next.y!=color->y || next.z!=color->z;*color=next;
+        }
+    }
     if(ImGui::IsItemActive() && ImGui::IsMouseDown(0)) {
         auto mouse=ImGui::GetIO().MousePos;
         int x=std::clamp(static_cast<int>((mouse.x-p.x)/cell),0,12);
@@ -570,6 +664,8 @@ bool ColorPalette(const char *id, ImVec4 *color) {
     }
     draw->AddCircle(indicator,cell*.32f,U(ImVec4(0,0,0,.6f)),24,Dp(3));
     draw->AddCircle(indicator,cell*.32f,U(ImVec4(1,1,1,1)),24,Dp(1.5f));
+    ImGui::RenderNavCursor(grid_item.Rect,grid_item.ID);
+    if(changed) ImGui::MarkItemEdited(grid_item.ID);
     changed=Slider("透明度",&color->w,0,1,"%.2f",ImGuiSliderFlags_NoRoundToFormat) || changed;
     ColorPreview(draw,preview,Offset(preview,width,preview_height),*color);
     ImGui::PopID(); return changed;
@@ -719,7 +815,7 @@ bool FloatingActionButton(const char *id, Icon icon, ImVec2 position, bool visib
     if(a<=0) return false;
     BeginFloating(id, position, a, !visible);
     auto p = ImGui::GetCursorScreenPos();
-    bool pressed = ImGui::InvisibleButton("action", ImVec2(Dp(48), Dp(48)));
+    bool pressed = ImGui::InvisibleButton("action", ImVec2(Dp(48), Dp(48)),ImGuiButtonFlags_EnableNav);
     auto color = GetTheme().accent;
     float dim=detail::InteractionFeedback(0.f,.15f);
     color.x*=1-dim; color.y*=1-dim; color.z*=1-dim;

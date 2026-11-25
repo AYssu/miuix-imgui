@@ -123,7 +123,7 @@ bool Navigation(const char *id,const NavItem *items,int count,int *selected,bool
     for(int i=0;i<count;++i) {
         if(i && !rail) ImGui::SameLine(0,Dp(4));
         ImGui::PushID(i); auto p=ImGui::GetCursorScreenPos();
-        if(ImGui::InvisibleButton("item",ImVec2(width,Dp(58)))) { changed=*selected!=i; *selected=i; }
+        if(ImGui::InvisibleButton("item",ImVec2(width,Dp(58)),ImGuiButtonFlags_EnableNav)) { changed=*selected!=i; *selected=i; }
         float a=detail::Animate("selected",*selected==i ? 1.f : 0.f);
         auto color=ImLerp(MutedColor(),GetTheme().accent,a);
         float feedback=detail::InteractionFeedback(.06f,.18f);
@@ -147,7 +147,7 @@ bool BeginSurface(const char *id,ImVec2 size,float rounding,ImVec4 color) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(Dp(GetTheme().tokens.surface_padding.x),Dp(GetTheme().tokens.surface_padding.y)));
     ImGui::PushStyleColor(ImGuiCol_ChildBg,color.w<0 ? Surface() : color);
     auto active_input=size.y==0 && detail::ContainsActiveInput(id) ? ImGuiChildFlags_AlwaysAutoResize : 0;
-    return ImGui::BeginChild(id,size,(size.y==0 ? ImGuiChildFlags_AutoResizeY : 0) | active_input |
+    return ImGui::BeginChild(id,size,(size.y==0 ? ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_NavFlattened : 0) | active_input |
         ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 }
 void EndSurface() { ImGui::EndChild(); ImGui::PopStyleColor(); ImGui::PopStyleVar(2); }
@@ -268,7 +268,7 @@ bool NavigationRail(const char *id,const NavItem *items,int count,int *selected,
         auto p=ImVec2(origin.x,ImGui::GetCursorScreenPos().y);
         float height=Dp(64-6*progress);
         ImGui::SetCursorScreenPos(p);
-        if(ImGui::InvisibleButton("item",ImVec2(width,height))) {
+        if(ImGui::InvisibleButton("item",ImVec2(width,height),ImGuiButtonFlags_EnableNav)) {
             changed=*selected!=i; *selected=i;
         }
         float a=detail::Animate("selected",*selected==i ? 1.f : 0.f);

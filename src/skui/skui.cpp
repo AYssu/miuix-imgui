@@ -452,14 +452,15 @@ bool BeginCard(const char *id) {
     // would end the host IME session and immediately dismiss the keyboard.
     auto active_input=detail::ContainsActiveInput(id) ? ImGuiChildFlags_AlwaysAutoResize : 0;
     return ImGui::BeginChild(id, ImVec2(0, 0),
-                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding | active_input,
+                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding |
+                             ImGuiChildFlags_NavFlattened | active_input,
                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 }
 void EndCard() {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 }
-bool detail::BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags) {
+bool detail::BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags,ImGuiChildFlags child_flags) {
     // Set the target before BeginChild lays out this frame. SetScrollY after
     // drawing defers the movement until the next frame and visibly trails input.
     auto *storage = ImGui::GetStateStorage();
@@ -494,7 +495,7 @@ bool detail::BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWind
                 : ImVec2(-1, std::clamp(window->Scroll.y - io.MouseDelta.y, 0.f, window->ScrollMax.y)));
         }
     }
-    bool visible = ImGui::BeginChild(id, size, 0, flags | ImGuiWindowFlags_NoBackground |
+    bool visible = ImGui::BeginChild(id, size, child_flags, flags | ImGuiWindowFlags_NoBackground |
                                     (horizontal ? ImGuiWindowFlags_HorizontalScrollbar : 0));
     ImGui::GetCurrentWindow()->StateStorage.SetInt(axis_key, horizontal ? 2 : 1);
     storage->SetInt(key, static_cast<int>(ImGui::GetCurrentWindow()->ID));
@@ -547,7 +548,7 @@ bool Button(const char *label, Tone tone, ImVec2 size) {
 }
 bool IconButton(const char *id, Icon icon) {
     ImVec2 p = ImGui::GetCursorScreenPos();
-    bool clicked = ImGui::InvisibleButton(id, ImVec2(Dp(36), Dp(36)));
+    bool clicked = ImGui::InvisibleButton(id, ImVec2(Dp(36), Dp(36)),ImGuiButtonFlags_EnableNav);
     float a=detail::InteractionFeedback(.5f,1.f);
     auto bg=Colors().icon_feedback; bg.w*=a;
     if (a>0)
@@ -734,7 +735,7 @@ void Badge(const char *label) {
 }
 void Swatch(const char *id, ImVec4 color, bool selected, bool *pressed) {
     auto p = ImGui::GetCursorScreenPos();
-    *pressed = ImGui::InvisibleButton(id, ImVec2(Dp(42), Dp(42)));
+    *pressed = ImGui::InvisibleButton(id, ImVec2(Dp(42), Dp(42)),ImGuiButtonFlags_EnableNav);
     auto c = Add(p, Dp(21), Dp(21));
     auto *d = ImGui::GetWindowDrawList();
     d->AddCircleFilled(c, Dp(17), U(color), 32);
@@ -872,7 +873,7 @@ bool BeginShell(const ShellOptions &o) {
                 shell.wide ? Add(pos, Dp(10), Dp(114 + i * 54)) : Add(pos, i * cell, size.y - bottom + Dp(7));
             ImGui::SetCursorScreenPos(p);
             ImGui::PushID(i);
-            if (ImGui::InvisibleButton("##nav", ImVec2(cell, Dp(50))))
+            if (ImGui::InvisibleButton("##nav", ImVec2(cell, Dp(50)),ImGuiButtonFlags_EnableNav))
                 *o.selected = i;
             float a = detail::Animate("selected", *o.selected == i ? 1.f : 0.f);
             ImGui::PopID();

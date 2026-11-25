@@ -132,6 +132,7 @@ if (skui::BreadcrumbBar("path", path, 4, &current)) {
 ## 输入接入
 
 已有输入后端继续通过 ImGui IO 投递按键、字符、鼠标/触摸事件。
+键盘启用、数值 / 选项操作、焦点恢复和 Escape / Alt+Left 优先级见 [键盘与返回](keyboard.md)。
 需要同步系统完整编辑状态时，使用 `SetTextInputHandler`，回调运行在渲染线程：
 
 - 宿主持有 NUL 结尾的 UTF-8 缓冲区，容量包含结尾 NUL。

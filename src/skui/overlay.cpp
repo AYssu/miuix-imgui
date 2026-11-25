@@ -82,7 +82,8 @@ bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags) {
     // A down event on the scrim is consumed by the modal. It never activates
     // the page underneath, including during the exit transition.
     if (!window->Appearing && ((ImGui::IsMouseClicked(0) && !window->Rect().Contains(ImGui::GetIO().MousePos)) ||
-                              ImGui::IsKeyPressed(ImGuiKey_Escape, false))) CloseOverlay();
+                              (GImGui->ActiveId==0 && GImGui->ActiveIdPreviousFrame==0 &&
+                               ImGui::Shortcut(ImGuiKey_Escape)))) CloseOverlay();
     BeginInert(state.GetBool(closing));
     return true;
 }

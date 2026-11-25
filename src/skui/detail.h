@@ -22,7 +22,8 @@ bool ContainsActiveInput(const char *child_id);
 float RowTextHeight(const char *title,const char *description,float width,float minimum_height,float title_size=16,float description_size=12);
 void RowText(ImVec2 min,ImVec2 max,const char *title,const char *description,float left=0,float right=0,float title_size=16,float description_size=12);
 bool CanScroll();
-bool BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags);
+bool BeginScroll(const char *id, ImVec2 size, bool horizontal, ImGuiWindowFlags flags,
+                 ImGuiChildFlags child_flags=0);
 enum class OverlayKind { Popup, Dialog, Sheet };
 bool BeginOverlay(const char *id, OverlayKind kind, ImGuiWindowFlags flags);
 void EndOverlay();
