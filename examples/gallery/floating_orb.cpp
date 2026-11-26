@@ -122,7 +122,7 @@ void FloatingOrb::Draw() {
 
     // Foreground geometry adds no input region: only the 64 dp orb owns touch.
     auto *draw=ImGui::GetForegroundDrawList();
-    auto accent=skui::GetTheme().accent,base=skui::Surface();
+    auto accent=skui::GetTheme().accent;
     if(motion) time_+=dt;
     else {impulse_={};for(auto &p:particles_) p={};}
     for(auto &tail:trail_) {
@@ -131,11 +131,7 @@ void FloatingOrb::Draw() {
         float fade=1-tail.age/.55f;
         draw->AddCircle(tail.position,r*(.70f+.12f*fade),Color(accent,.13f*fade*fade*visibility),40,skui::Dp(1.4f));
     }
-    // Restrained surface, rim and two slowly travelling arcs; no texture blur/glow pass.
-    for(int i=3;i>0;--i)
-        draw->AddCircleFilled(Add(center_,{0,skui::Dp(2)}),r-skui::Dp(2)+skui::Dp(i),
-                              IM_COL32(0,0,0,static_cast<int>(4*visibility)),48);
-    draw->AddCircleFilled(center_,r-skui::Dp(2),Color(base,.97f*visibility),64);
+    // Open center: only the rim, travelling arcs and particles cover the background.
     draw->AddCircle(center_,r-skui::Dp(3),Color(accent,.22f*visibility),64,skui::Dp(1));
     float angle=time_*.42f;
     for(int i=0;i<2;++i) {
