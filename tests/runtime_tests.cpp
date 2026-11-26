@@ -154,6 +154,50 @@ void NestedInputVisibility() {
     skui::SetTextInputHandler(nullptr);
     std::puts("PASS nested input: active card survives viewport shrink and scrolls its field into view without ending the edit session");
 }
+void RotatedShellInput() {
+    for(bool nested:{false,true}) {
+        Frame frame;frame.theme.animations=false;frame.theme.scale=1272.f/490.f;
+        auto &io=ImGui::GetIO();io.DisplaySize=ImVec2(1272,2800);
+        skui::Router router;skui::RouterView view;char text[64]="";ImVec2 min,max;
+        int active_callbacks=0;
+        skui::SetTextInputHandler([](skui::TextInputEvent &event,void *data) {
+            if(event.active) ++*static_cast<int *>(data);
+        },&active_callbacks);
+        router.Register("/input",[&](const skui::Route &) {
+            if(nested) {skui::Space(220);if(skui::BeginCard("input-card")) {
+                skui::InputText("Name",text,sizeof(text));min=ImGui::GetItemRectMin();max=ImGui::GetItemRectMax();
+            }skui::EndCard();}
+            else {skui::SearchField("search",text,sizeof(text));min=ImGui::GetItemRectMin();max=ImGui::GetItemRectMax();}
+        });
+        router.Reset("/input");
+        skui::ShellOptions shell;shell.id="rotated-input-shell";shell.content_includes_header=true;
+        shell.initial_position=ImVec2(44,182);shell.initial_size=ImVec2(1183,1850);
+        const skui::NavItem items[]={{"Components",skui::Icon::Components},{"Settings",skui::Icon::Settings}};
+        int selected=0;shell.items=items;shell.item_count=2;shell.selected=&selected;
+        auto draw=[&] {
+            ImGui::PushFont(nullptr,skui::TextSize(16));
+            bool visible=skui::BeginShell(shell);
+            if(visible) view.Draw(router,{},[](const skui::Route &) {skui::TopAppBar("header","Components","Input preview");});
+            skui::EndShell();ImGui::PopFont();
+        };
+        frame.Draw(draw);frame.Draw(draw);
+        io.DisplaySize=ImVec2(2800,1272);frame.Draw(draw);frame.Draw(draw);
+        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        io.AddMousePosEvent((min.x+max.x)*.5f,(min.y+max.y)*.5f);frame.Draw(draw);
+        io.AddMouseButtonEvent(0,true);frame.Draw(draw);io.AddMouseButtonEvent(0,false);frame.Draw(draw);
+        CHECK(active_callbacks>0);auto active=GImGui->ActiveId;CHECK(active!=0);
+        shell.visible_bottom=1272-762;
+        for(int i=0;i<10;++i) {
+            int before=active_callbacks;frame.Draw(draw);
+            CHECK(active_callbacks==before+1 && GImGui->ActiveId==active);
+        }
+        CHECK(max.y<=shell.visible_bottom && min.y>=0);
+        shell.visible_bottom=0;frame.Draw(draw);frame.Draw(draw);
+        CHECK(skui::ShellSize().y>=1090);
+        skui::SetTextInputHandler(nullptr);
+    }
+    std::puts("PASS rotated shell: compact navigation yields to the keyboard and search/nested input remain active and visible");
+}
 void RequestCosts() {
     ImGuiMemAllocFunc original_allocate;ImGuiMemFreeFunc original_free;void *original_user;
     ImGui::GetAllocatorFunctions(&original_allocate,&original_free,&original_user);
@@ -264,7 +308,7 @@ void Waking() {
 #endif
 }
 int main() {
-    RequestCosts();Requests();Viewports();AdaptiveRows();NestedInputVisibility();Tasks();LongData();
+    RequestCosts();Requests();Viewports();AdaptiveRows();NestedInputVisibility();RotatedShellInput();Tasks();LongData();
 #ifdef SKUI_TEST_NATIVE_WAKE
     Waking();
 #endif

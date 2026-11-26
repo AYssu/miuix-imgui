@@ -50,7 +50,9 @@ adb -s <设备序列号> shell "su -c '/data/local/tmp/sk-imgui-ui'"
 
 原独立桥接已在 Android 13 / MIUI / 讯飞输入法实测；遇到 Android 16 / 一加 PLQ110
 此前记录的 `Unknown pid` 拒绝时，现在会改走临时 APK 路线。
-回退路线已在 Android 13 测试，尚未完成 Android 16 真机验证。
+回退路线已在 Android 13 测试；2026-11-26 亦在该一加 Android 16 / 搜狗 OEM 输入法上验证
+搜索与卡片文本回填、竖屏转横屏和编辑中左右横屏切换，以及返回后卸载。
+该机尚未执行完整 IME 故障矩阵；范围见 [测试记录](testing.md)。
 
 可单独检查输入窗口接口兼容性，不启动 Gallery 或打开键盘：
 

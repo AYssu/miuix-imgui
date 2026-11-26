@@ -834,7 +834,11 @@ bool BeginShell(const ShellOptions &o) {
     shell.size = size;
     shell.wide = size.x >= Dp(700);
     float rail = 0;
-    float top = Dp(o.content_includes_header ? 44 : 116), bottom = shell.wide ? Dp(12) : Dp(76);
+    // A portrait window stays compact after rotation. Keeping its bottom bar
+    // above a landscape keyboard can leave no room below the page header,
+    // clipping the active editor and ending the native IME session.
+    bool bottom_navigation = !shell.wide && !keyboard;
+    float top = Dp(o.content_includes_header ? 44 : 116), bottom = bottom_navigation ? Dp(76) : Dp(12);
     // Drag only this quiet strip; regular content never drags the application.
     ImGui::SetCursorPos(ImVec2(Dp(16), Dp(5)));
     ImGui::InvisibleButton("##drag", ImVec2(std::max(Dp(20), size.x - Dp(70)), Dp(28)));
@@ -866,7 +870,7 @@ bool BeginShell(const ShellOptions &o) {
     if (shell.wide)
         d->AddLine(Add(pos, rail, Dp(44)), Add(pos, rail, size.y - Dp(16)), U(Color(0xE4E7ED, 0x31343D)),
                    Dp(1));
-    if (!shell.wide && o.items && o.selected && o.item_count > 0) {
+    if (bottom_navigation && o.items && o.selected && o.item_count > 0) {
         float cell = shell.wide ? rail - Dp(20) : size.x / o.item_count;
         if (!shell.wide)
             d->AddRectFilled(Add(pos, Dp(1), size.y - bottom), Add(pos, size.x - Dp(1), size.y - Dp(1)),
