@@ -354,6 +354,9 @@ void DrawIcon(Icon icon, ImVec2 c, float size, ImU32 color) {
         line(-.5f, -.5f, .5f, .5f);
         line(.5f, -.5f, -.5f, .5f);
         break;
+    case Icon::Minimize:
+        line(-.55f, .25f, .55f, .25f);
+        break;
     case Icon::Back:
         line(.25f, -.55f, -.3f, 0);
         line(-.3f, 0, .25f, .55f);
@@ -767,6 +770,8 @@ void EndDialog() { detail::EndOverlay(); }
 void CloseDialog() { detail::CloseOverlay(); }
 
 bool BeginShell(const ShellOptions &o) {
+    if (o.minimize_requested)
+        *o.minimize_requested = false;
     if (o.back_requested)
         *o.back_requested = false;
     if (o.close_requested)
@@ -775,7 +780,7 @@ bool BeginShell(const ShellOptions &o) {
     WindowPlacement placement{previous ? previous->Pos : o.initial_position,previous ? previous->Size : o.initial_size};
     // Resolve all geometry before Begin, so background, children and hit boxes
     // use the same bounds on the first keyboard/rotation frame.
-    if(previous && GImGui->ActiveId==previous->GetID("##drag") && ImGui::IsMouseDragging(0))
+    if(previous && GImGui->ActiveId==ImHashStr("##drag",0,previous->ID) && ImGui::IsMouseDragging(0))
         placement.position=Add(placement.position,ImGui::GetIO().MouseDelta.x,ImGui::GetIO().MouseDelta.y);
     auto *viewport=ImGui::GetMainViewport();
     auto bounds=ResolveViewport(viewport->Size,o.safe_insets);
@@ -784,9 +789,12 @@ bool BeginShell(const ShellOptions &o) {
     auto initial_unlimited=placement;
     if(previous) {
         auto &saved=previous->StateStorage;
-        auto limited=previous->GetID("##ime-limited");
-        auto x=previous->GetID("##ime-x"),y=previous->GetID("##ime-y");
-        auto width=previous->GetID("##ime-width"),height=previous->GetID("##ime-height");
+        // An inactive/minimized window may have compacted its ID stack.
+        // Its persistent root ID/storage survive; Begin rebuilds the stack later.
+        auto key=[&](const char *label) {return ImHashStr(label,0,previous->ID);};
+        auto limited=key("##ime-limited");
+        auto x=key("##ime-x"),y=key("##ime-y");
+        auto width=key("##ime-width"),height=key("##ime-height");
         bool was_limited=saved.GetBool(limited);
         if(o.visible_bottom>0 && std::isfinite(o.visible_bottom)) {
             if(!was_limited) {
@@ -841,8 +849,14 @@ bool BeginShell(const ShellOptions &o) {
     float top = Dp(o.content_includes_header ? 44 : 116), bottom = bottom_navigation ? Dp(76) : Dp(12);
     // Drag only this quiet strip; regular content never drags the application.
     ImGui::SetCursorPos(ImVec2(Dp(16), Dp(5)));
-    ImGui::InvisibleButton("##drag", ImVec2(std::max(Dp(20), size.x - Dp(70)), Dp(28)));
+    ImGui::InvisibleButton("##drag", ImVec2(std::max(Dp(20), size.x - Dp(o.minimize_requested ? 114 : 70)), Dp(28)));
     Label(d, Add(pos, Dp(20), Dp(14)), "sk-imgui-ui", MutedColor(), 11);
+    if (o.minimize_requested) {
+        ImGui::SetCursorPos(ImVec2(size.x - Dp(94), Dp(6)));
+        if (IconButton("##minimize", Icon::Minimize))
+            *o.minimize_requested = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("缩小为悬浮球");
+    }
     ImGui::SetCursorPos(ImVec2(size.x - Dp(50), Dp(6)));
     if (IconButton("##close", Icon::Close) && o.close_requested)
         *o.close_requested = true;

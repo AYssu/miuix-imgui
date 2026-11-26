@@ -2,6 +2,7 @@
 #include "gallery.h"
 #include "preferences.h"
 #include "data_model.h"
+#include "floating_orb.h"
 #include "imgui_internal.h"
 #include <algorithm>
 #include <cctype>
@@ -90,6 +91,7 @@ struct Gallery {
     bool initialized = false;
     float scale = 2.2f;
     ImVec2 window_pos{}, window_size{};
+    FloatingOrb orb;
     int sample_nav=0, color_space=0;
     skui::GlassBackdrop glass;
     skui::GlassStyle glass_style;
@@ -771,6 +773,18 @@ struct Gallery {
         theme.scale = scale;
         skui::ApplyTheme(theme);
         ImGui::PushFont(nullptr, skui::TextSize(16));
+        auto bounds=skui::ResolveViewport(display,safe_insets,keyboard_height);
+        // Keep a small margin around the touch target, including on rotation.
+        float margin=std::min({skui::Dp(8),bounds.size.x*.25f,bounds.size.y*.25f});
+        bounds.position.x+=margin;bounds.position.y+=margin;
+        bounds.size.x-=2*margin;bounds.size.y-=2*margin;
+        orb.BeginFrame(bounds);
+        if(!orb.ShellVisible()) {
+            orb.Draw();ImGui::PopFont();return;
+        }
+        bool inert=orb.Transitioning();
+        ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha,1.f);
+        ImGui::BeginDisabled(inert);
         const skui::NavItem items[] = {{"组件", skui::Icon::Components},
                                        {"布局", skui::Icon::Layout},
                                        {"导航", skui::Icon::Navigation},
@@ -779,7 +793,7 @@ struct Gallery {
         const char *titles[] = {"组件", "布局", "导航", "设置"};
         const char *subtitles[] = {"每一次点击，都有真实反馈", "用统一的设计组织内容", "让页面之间自然连接",
                                    "把界面调成你喜欢的样子"};
-        bool back = false, close = false;
+        bool back = false, close = false, minimize = false;
         int previous = nav;
         bool detail = router.Current()->path == "/detail";
         skui::ShellOptions shell;
@@ -797,6 +811,7 @@ struct Gallery {
         shell.can_go_back = router.CanGoBack();
         shell.back_requested = &back;
         shell.close_requested = &close;
+        shell.minimize_requested = &minimize;
         shell.content_includes_header = true;
         shell.sidebar_expanded = &sidebar_expanded;
         shell.initial_position = ImVec2(display.x * saved.position.x, display.y * saved.position.y);
@@ -837,6 +852,12 @@ struct Gallery {
             }
         }
         skui::EndShell();
+        ImGui::EndDisabled();ImGui::PopStyleVar();
+        if(minimize) orb.Minimize(window_pos,window_size);
+        if(orb.Minimized() || orb.Transitioning()) {
+            orb.TransformShell(shell.id);
+            orb.Draw();ImGui::PopFont();return;
+        }
         {
             const skui::Icon icons[] = {skui::Icon::Heart, skui::Icon::Search, skui::Icon::Settings};
             const char *labels[] = {"收藏", "搜索", "设置"};

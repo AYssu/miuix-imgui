@@ -29,7 +29,16 @@ CC=clang CXX=clang++ \
 主机测试使用真实 ImGui 帧及合成输入，覆盖路由、控件事件、禁用/取消点击、缩放、
 拖动/滚动、选择与级联菜单、弹层层级、UTF-8 编辑回填、折叠/侧栏/提示等动画。
 折叠与侧栏已有 30/60/120 Hz 时间步长测试；不是所有动画都已逐一覆盖三种频率。
-CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests`、`skui-devtools-tests`、`skui-keyboard-tests` 和 `skui-touch-tests`。
+CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests`、`skui-devtools-tests`、`skui-keyboard-tests` 和 `skui-touch-tests`；POSIX 另注册 `skui-gallery-tests`。
+Gallery 回归运行完整页面与实际触摸区域收集，检查右上角缩小 / 点击恢复、拖动不误展开、
+小幅触摸抖动、轨迹衰减、旋转边界、恢复后的窗口尺寸 / 位置，以及关闭动画后的闲置重绘停止。
+将 ImGui 闲置缓存回收时间缩短，验证主窗口 ID 栈被清空后仍能恢复，并检查粒子顶点有限、有界。
+
+2026-11-26，粒子悬浮球在 ADB 小米 23049RAD8C / Android 13 / Vulkan 上验证：
+右上角缩小、拖动与轨迹显示、停留超过 60 秒后的恢复、收起时转横屏并恢复，以及横屏搜索输入中
+缩小后结束键盘。结束时辅助包不存在，正常日志 0 字节；本轮实例和上传文件已清理，旋转设置恢复原值。
+本地主机 8 项 CTest、Clang ASan / UBSan、SDL2 offscreen 实际 GL 绘制与独立 consumer 通过；
+Android arm64 构建和 16 KiB ELF 对齐检查通过。图片与测试脚本只保留在忽略的构建目录。
 触摸区域回归使用真实 ImGui 窗口和合成输入，覆盖独立监控窗口反复夺回焦点、拖动、关闭、
 窗口间空白穿透、只显示窗口、折叠 / 屏外区域，以及弹窗外部关闭和键盘区域排除。
 它不模拟 Linux 输入设备或替代真机触摸验证。

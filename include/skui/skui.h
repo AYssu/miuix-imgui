@@ -30,7 +30,8 @@ enum class Icon {
     Plus,
     Heart,
     Info,
-    Sidebar
+    Sidebar,
+    Minimize
 };
 
 struct Theme {
@@ -286,6 +287,8 @@ struct ShellOptions {
     bool content_includes_header = false;
     // Optional externally controlled wide-screen rail state. Otherwise stored per shell.
     bool *sidebar_expanded = nullptr;
+    // Optional header action. The host owns the minimized presentation/lifecycle.
+    bool *minimize_requested = nullptr;
 };
 // A movable/resizable floating application frame. Initial positions/sizes are
 // physical pixels; component dimensions use Theme::scale. EndShell always.

@@ -17,7 +17,7 @@
 | 布局与导航 | Surface、Card、TopAppBar、CollapsingTopAppBar、可折叠 NavigationRail、NavigationBar、TabBar、BreadcrumbBar、RouterView |
 | 反馈与连续输入 | Snackbar、Tooltip、Badge、Progress、下拉刷新、NumberPicker、ColorPalette、ColorPicker |
 | 高级能力 | 9 个 Window 组件、Glass 模糊/折射、OkHSV / OkLab / OkLCH、触觉回调与可调导航弹簧 |
-| Android Demo | 拖动/缩放悬浮窗口、触摸适配、系统输入法、主题切换、分类展示与中英文搜索 |
+| Android Demo | 拖动/缩放窗口、粒子悬浮球收起与恢复、触摸适配、系统输入法、主题切换、分类展示与中英文搜索 |
 
 Miuix 目录的 55 个名称均有对应交互。9 个 Window 组件在 Android Demo 中提交到
 独立的透明 Surface，支持 Vulkan / OpenGL；其他宿主可安装窗口回调，未接入时回退到 Overlay。

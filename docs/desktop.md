@@ -1,5 +1,8 @@
 # 桌面 Gallery
 
+桌面 Gallery 共用右上角缩小按钮与粒子悬浮球，点击球可恢复页面，拖动可移动球。
+球绘制在 SDL 窗口内；退出宿主仍使用系统窗口关闭按钮或展开后的 `×`。
+
 可选的 SDL2 / OpenGL3 宿主复用 [Gallery](../examples/gallery/gallery.cpp)，用于贡献者本地交互验证。
 默认关闭，不影响纯组件库、headless 回归和 Android 构建。
 

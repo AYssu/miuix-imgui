@@ -47,6 +47,9 @@ target_include_directories(skui-navigation INTERFACE
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(skui-navigation INTERFACE cxx_std_17)
 
+set(SKUI_GALLERY_SOURCES examples/gallery/gallery.cpp examples/gallery/preferences.cpp
+    examples/gallery/data_model.cpp examples/gallery/floating_orb.cpp)
+
 if(SKUI_BUILD_DESKTOP_DEMO)
     if(ANDROID OR NOT UNIX)
         message(FATAL_ERROR "The desktop gallery currently requires a POSIX desktop host; the UI library has no such dependency")
@@ -55,8 +58,7 @@ if(SKUI_BUILD_DESKTOP_DEMO)
     find_package(OpenGL REQUIRED)
     find_package(Threads REQUIRED)
     add_executable(skui-gallery
-        examples/desktop/main.cpp examples/gallery/gallery.cpp
-        examples/gallery/preferences.cpp examples/gallery/data_model.cpp
+        examples/desktop/main.cpp ${SKUI_GALLERY_SOURCES}
         src/ImGui/backends/imgui_impl_sdl2.cpp src/ImGui/backends/imgui_impl_opengl3.cpp)
     target_include_directories(skui-gallery PRIVATE examples/gallery include/ImGui/backends)
     target_link_libraries(skui-gallery PRIVATE skui::ui SDL2::SDL2 OpenGL::GL Threads::Threads)
@@ -113,7 +115,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
         set(SKUI_PACKAGE_FREETYPE ON)
     endif()
     add_executable(sk-imgui-ui
-        src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp examples/gallery/data_model.cpp
+        src/main.cpp src/Android_draw/draw_Gui.cpp ${SKUI_GALLERY_SOURCES}
         src/Android_touch/TouchHelperA.cpp src/Android_touch/TouchRegions.cpp
         src/Android_Graphics/GraphicsManager.cpp src/Android_Graphics/OpenGLGraphics.cpp
         src/Android_Graphics/VulkanGraphics.cpp src/Android_Graphics/vulkan_wrapper.cpp
@@ -209,6 +211,13 @@ if(SKUI_BUILD_TESTS)
         target_compile_definitions(skui-runtime-tests PRIVATE SKUI_TEST_NATIVE_WAKE)
     endif()
     add_test(NAME skui-runtime-tests COMMAND skui-runtime-tests)
+    if(UNIX)
+        add_executable(skui-gallery-tests tests/gallery_tests.cpp ${SKUI_GALLERY_SOURCES}
+            src/Android_touch/TouchRegions.cpp)
+        target_include_directories(skui-gallery-tests PRIVATE examples/gallery include/Android_touch)
+        target_link_libraries(skui-gallery-tests PRIVATE skui::ui Threads::Threads)
+        add_test(NAME skui-gallery-tests COMMAND skui-gallery-tests)
+    endif()
     add_executable(skui-devtools-tests tests/devtools_tests.cpp)
     target_link_libraries(skui-devtools-tests PRIVATE skui::ui)
     add_test(NAME skui-devtools-tests COMMAND skui-devtools-tests)
