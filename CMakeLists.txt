@@ -114,7 +114,7 @@ if(SKUI_BUILD_ANDROID_DEMO)
     endif()
     add_executable(sk-imgui-ui
         src/main.cpp src/Android_draw/draw_Gui.cpp examples/gallery/gallery.cpp examples/gallery/preferences.cpp examples/gallery/data_model.cpp
-        src/Android_touch/TouchHelperA.cpp
+        src/Android_touch/TouchHelperA.cpp src/Android_touch/TouchRegions.cpp
         src/Android_Graphics/GraphicsManager.cpp src/Android_Graphics/OpenGLGraphics.cpp
         src/Android_Graphics/VulkanGraphics.cpp src/Android_Graphics/vulkan_wrapper.cpp
         src/Android_my_imgui/AndroidImgui.cpp src/Android_my_imgui/my_imgui.cpp
@@ -141,6 +141,14 @@ if(SKUI_BUILD_ANDROID_DEMO)
         include/Android_my_imgui "${skui_ime_generated}")
     target_compile_features(skui-ime-tests PRIVATE cxx_std_17)
     target_link_options(skui-ime-tests PRIVATE "-Wl,-z,max-page-size=16384")
+    add_executable(skui-vulkan-tests EXCLUDE_FROM_ALL tests/android_vulkan_tests.cpp
+        src/Android_Graphics/VulkanGraphics.cpp src/Android_Graphics/vulkan_wrapper.cpp
+        src/Android_my_imgui/AndroidImgui.cpp src/Android_my_imgui/my_imgui_impl_android.cpp
+        src/ImGui/backends/imgui_impl_vulkan.cpp src/My_Utils/stb_image/stb_image.cpp)
+    target_include_directories(skui-vulkan-tests PRIVATE $<TARGET_PROPERTY:sk-imgui-ui,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(skui-vulkan-tests PRIVATE VK_USE_PLATFORM_ANDROID_KHR IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
+    target_link_libraries(skui-vulkan-tests PRIVATE skui::ui log android z)
+    target_link_options(skui-vulkan-tests PRIVATE "-Wl,-z,max-page-size=16384")
 endif()
 
 if(SKUI_INSTALL)
@@ -207,4 +215,8 @@ if(SKUI_BUILD_TESTS)
     add_executable(skui-keyboard-tests tests/keyboard_tests.cpp)
     target_link_libraries(skui-keyboard-tests PRIVATE skui::ui)
     add_test(NAME skui-keyboard-tests COMMAND skui-keyboard-tests)
+    add_executable(skui-touch-tests tests/touch_tests.cpp src/Android_touch/TouchRegions.cpp)
+    target_include_directories(skui-touch-tests PRIVATE include/Android_touch)
+    target_link_libraries(skui-touch-tests PRIVATE skui::ui)
+    add_test(NAME skui-touch-tests COMMAND skui-touch-tests)
 endif()

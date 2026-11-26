@@ -25,7 +25,11 @@ void screen_config() {
     auto now = std::chrono::steady_clock::now();
     if (now - last < std::chrono::milliseconds(250))
         return;
-    displayInfo = android::ANativeWindowCreator::GetDisplayInfo();
+    auto next = android::ANativeWindowCreator::GetDisplayInfo();
+    // A failed display query during rotation must not erase the last usable
+    // viewport or feed a zero-sized display into layout and input routing.
+    if (next.width > 0 && next.height > 0 && next.orientation >= 0 && next.orientation <= 3)
+        displayInfo = next;
     last = now;
 }
 
@@ -43,12 +47,6 @@ void Layout_tick_UI(bool *running) {
     gallery::Draw(running,
                   ImVec2(static_cast<float>(displayInfo.width), static_cast<float>(displayInfo.height)),
                   AndroidIme::KeyboardHeight());
-    auto pos = skui::ShellPosition(), size = skui::ShellSize();
-    // Popups can extend beyond the shell. Capture the screen while one is open,
-    // so both selecting an entry and tapping outside to dismiss reach ImGui.
-    if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
-        Touch::SetCaptureRegion(0, 0, displayInfo.width,
-                                displayInfo.height - AndroidIme::KeyboardHeight());
-    else
-        Touch::SetCaptureRegion(pos.x, pos.y, size.x, size.y);
+    Touch::SetCaptureRegions(Touch::CollectCaptureRegions(
+        ImVec2(displayInfo.width, displayInfo.height), AndroidIme::KeyboardHeight()));
 }

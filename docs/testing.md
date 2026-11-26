@@ -29,7 +29,10 @@ CC=clang CXX=clang++ \
 主机测试使用真实 ImGui 帧及合成输入，覆盖路由、控件事件、禁用/取消点击、缩放、
 拖动/滚动、选择与级联菜单、弹层层级、UTF-8 编辑回填、折叠/侧栏/提示等动画。
 折叠与侧栏已有 30/60/120 Hz 时间步长测试；不是所有动画都已逐一覆盖三种频率。
-CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests` 、`skui-devtools-tests` 和 `skui-keyboard-tests`。
+CTest 注册 `skui-tests`、`skui-advanced-tests`、`skui-foundation-tests`、`skui-runtime-tests`、`skui-devtools-tests`、`skui-keyboard-tests` 和 `skui-touch-tests`。
+触摸区域回归使用真实 ImGui 窗口和合成输入，覆盖独立监控窗口反复夺回焦点、拖动、关闭、
+窗口间空白穿透、只显示窗口、折叠 / 屏外区域，以及弹窗外部关闭和键盘区域排除。
+它不模拟 Linux 输入设备或替代真机触摸验证。
 高级测试检查 9 个 Window 接口的绘制分层、提交失败回退及关闭通知，2916 个颜色往返和参考值，
 Glass 的背景混色 / 纹理更新 / 缩放回收、零模糊细线清晰度、局部坐标、快照隔离及帧缓冲缩放，
 以及模糊强度跨整数边界的连续性、细条纹随背景移动时的过滤稳定性，
@@ -66,18 +69,18 @@ POSIX 主机还测试设置编解码、版本 / 默认值、损坏 / 超长输�
 | 文档、CI、脚本 | 仓库检查、脚本语法、涉及的命令/工作流 |
 | 公开 API、组件或路由 | 主机测试、独立接入、ASan/UBSan；视觉行为另需 Gallery 检查 |
 | 动画、滚动、浮层输入 | 相关交互回归、进退场/反向/动画关闭；必要的帧时间和真机检查 |
-| Android 窗口、触摸、IME | Android 两个目标编译、相关真机操作与退出清理 |
+| Android 窗口、触摸、IME | Gallery、IME / Vulkan 回归目标编译、相关真机操作与退出清理 |
 | 依赖或工具链 | 干净目录完整构建、许可/哈希检查、相关主机与 Android 路径 |
 
 ## Android 编译验证
 
 ```bash
 bash scripts/build-android.sh arm64-v8a
-cmake --build build/arm64-v8a --target skui-ime-tests --parallel 4
+cmake --build build/arm64-v8a --target skui-ime-tests skui-vulkan-tests --parallel 4
 "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify \
   build/arm64-v8a/generated/ime/skui-ime-helper.apk
 python3 scripts/check-android-elf.py \
-  build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests
+  build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests build/arm64-v8a/skui-vulkan-tests
 ```
 
 [CI](../.github/workflows/ci.yml) 在 push、PR 和手动触发时运行 GCC/Clang、Sanitizer、
@@ -94,9 +97,23 @@ GPU/渲染后端和输入法，不公开设备唯一序列号。
 Gallery 检查包含：点击/禁用/取消、拖动与嵌套滚动、短/长列表、菜单级联和关闭，
 弹层遮罩与背景隔离，折叠双向/反向、路由前进返回、主题/缩放、颜色连续输入和数字滚轮。
 新增 Window 后端时另检查真实 Surface 创建、遮罩、选中 / 外部关闭、重复打开、旋转及退出回收；
+窗口 / 触摸修改还需检查竖屏、左右横屏启动和运行中旋转，以及点击主窗口后再次操作主窗口外的监控窗口。
 Glass 检查动态背景和模糊参数变化，触觉检查开关与系统勿扰约束。
 修改系统输入法时另检查中文、emoji、退格、清空、完成/取消、键盘避让与退出。
 动画评估同时检查掉帧、布局跳变、退出闪现，不只截取一个静态画面。
+
+`skui-vulkan-tests` 是显式构建的真机目标，不包含在分发的 Gallery 中。它创建真实 Surface 并提交 GPU 工作，
+注入取图 / 提交阶段的 `OUT_OF_DATE`，检查尺寸不变时交换链仍重建且后续帧继续提交；
+另检查 `SUBOPTIMAL` 下不丢弃已取得的图像，也不反复重建交换链。启动前检查没有已有 Gallery / 回归实例，
+上传后以 root 执行 `timeout 30 /data/local/tmp/skui-vulkan-tests`；完成后确认该 PID 退出并删除本轮上传文件。
+CI 只编译和检查 ELF，真实 GPU 回归需要允许操作的设备。
+
+2026-11-26，小米 Android 13 / Vulkan：上述交换链故障注入中，修复前在同尺寸重建检查失败，
+修复后两条失效恢复与 `SUBOPTIMAL` 连续提交检查通过。实际 Gallery 左右横屏启动和横竖屏切换均能显示，
+正常日志为 0 字节。使用实际 evdev 读取 / 坐标转换 / 捕获代码的独立双窗口探针，在竖屏、左右横屏、
+转回竖屏的过程中交替点击主窗口和主窗口外的监控窗口，各 12 次均收到点击。
+7 项主机 CTest 与 ASan / UBSan 通过；所有本轮原生进程、上传文件均已清理，旋转设置恢复原值。
+本轮没有在一加 / Android 16 上执行测试，仍需该机复测。
 
 IME 自动回归会真实安装/卸载辅助包、打开输入法并注入文字，需使用专门的 root 测试设备：
 

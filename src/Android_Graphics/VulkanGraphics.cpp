@@ -274,20 +274,15 @@ void VulkanGraphics::PrepareFrame(bool resize) {
     if (m_SwapChainRebuild || resize) {
         int width = ANativeWindow_getWidth(m_Window);
         int height = ANativeWindow_getHeight(m_Window);
-        if (m_LastWidth == 0 || m_LastHeight == 0) {
-            m_LastWidth = width;
-            m_LastHeight = height;
-        }
         if (width > 0 && height > 0) {
-            if (width != m_LastWidth || height != m_LastHeight) {
-                //切屏休息半秒
-                usleep(500000);
-                m_LastWidth = width;
-                m_LastHeight = height;
+            // Rotation can invalidate a square surface's swapchain without
+            // changing its dimensions. OUT_OF_DATE always requires recovery.
+            if (m_SwapChainRebuild || width != wd->Width || height != wd->Height) {
                 ImGui_ImplVulkan_SetMinImageCount(m_MinImageCount);
                 ImGui_ImplVulkanH_CreateOrResizeWindow(m_Instance, m_PhysicalDevice, m_Device, wd.get(),
                                                        m_QueueFamily, m_Allocator, width, height, m_MinImageCount, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
                 wd->FrameIndex = 0;
+                wd->SemaphoreIndex = 0;
                 m_SwapChainRebuild = false;
             }
         }
@@ -302,11 +297,15 @@ void VulkanGraphics::Render(ImDrawData *drawData) {
     VkSemaphore render_complete_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
     err = vkAcquireNextImageKHR(m_Device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE,
                                 &wd->FrameIndex);
-    if (err == VK_ERROR_OUT_OF_DATE_KHR /*|| err == VK_SUBOPTIMAL_KHR*/) {
+    if (err == VK_ERROR_OUT_OF_DATE_KHR) {
         m_SwapChainRebuild = true;
         return;
     }
-    //check_vk_result(err);
+    // SUBOPTIMAL still acquires an image and signals its semaphore. Square
+    // Android surfaces can report it continuously; keep presenting rather
+    // than rebuilding and waiting for the GPU on every frame.
+    bool suboptimal = err == VK_SUBOPTIMAL_KHR;
+    if (err != VK_SUCCESS && !suboptimal) { check_vk_result(err); return; }
 
     ImGui_ImplVulkanH_Frame *fd = &wd->Frames[wd->FrameIndex];
     {
@@ -364,8 +363,6 @@ void VulkanGraphics::Render(ImDrawData *drawData) {
     }
 
     {
-        if (m_SwapChainRebuild)
-            return;
         VkSemaphore render_complete_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
         VkPresentInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -375,11 +372,11 @@ void VulkanGraphics::Render(ImDrawData *drawData) {
         info.pSwapchains = &wd->Swapchain;
         info.pImageIndices = &wd->FrameIndex;
         VkResult err = vkQueuePresentKHR(m_Queue, &info);
-        if (err == VK_ERROR_OUT_OF_DATE_KHR /*|| err == VK_SUBOPTIMAL_KHR*/) {
+        if (err == VK_ERROR_OUT_OF_DATE_KHR) {
             m_SwapChainRebuild = true;
             return;
         }
-        //check_vk_result(err);
+        if (err != VK_SUCCESS && err != VK_SUBOPTIMAL_KHR) { check_vk_result(err); return; }
         wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount; // Now we can use the next set of semaphores
     }
 }

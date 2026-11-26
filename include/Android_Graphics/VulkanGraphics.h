@@ -43,8 +43,6 @@ private:
     };
     std::map<unsigned int,NativeLayer> m_Layers;
 
-    int m_LastWidth = 0;
-    int m_LastHeight = 0;
 public:
     VulkanGraphics() {
 		snprintf(RenderName, sizeof(RenderName), "Vulkan");

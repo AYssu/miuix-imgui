@@ -114,10 +114,10 @@ jobs:
       - name: Build native gallery and embedded IME helper
         run: bash scripts/build-android.sh arm64-v8a
       - name: Compile device regression target
-        run: cmake --build build/arm64-v8a --target skui-ime-tests --parallel 4
+        run: cmake --build build/arm64-v8a --target skui-ime-tests skui-vulkan-tests --parallel 4
       - name: Validate embedded helper signature and ELF page alignment
         run: |
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify build/arm64-v8a/generated/ime/skui-ime-helper.apk
-          python3 scripts/check-android-elf.py build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests
+          python3 scripts/check-android-elf.py build/arm64-v8a/sk-imgui-ui build/arm64-v8a/skui-ime-tests build/arm64-v8a/skui-vulkan-tests
       - name: Relocated Android library package consumers
         run: python3 scripts/check-package.py --android-build build/arm64-v8a

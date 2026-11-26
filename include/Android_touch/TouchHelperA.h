@@ -5,6 +5,7 @@
 #include <vector>
 #include <functional>
 #include "VectorStruct.h"
+#include "TouchRegions.h"
 
 namespace Touch {
     struct touchObj {
@@ -33,6 +34,7 @@ namespace Touch {
     // Configure only while readers are stopped. Callback/user outlive Init/Close.
     void SetWakeHandler(void (*handler)(void *),void *user=nullptr);
     void SetCaptureRegion(float x, float y, float width, float height);
+    void SetCaptureRegions(const CaptureRegions &regions);
 
     void Down(float x, float y);
 

@@ -49,7 +49,7 @@ namespace Touch {
     static std::vector<InputSample> pendingInput, drainedInput;
     static void (*wakeHandler)(void *)=nullptr;
     static void *wakeUser=nullptr;
-    static float captureX = 0, captureY = 0, captureWidth = 0, captureHeight = 0;
+    static CaptureRegions captureRegions;
 
     static bool readOnly = false;
 
@@ -237,8 +237,7 @@ namespace Touch {
                     auto& finger = device.Finger[latest];
                     auto position = Touch2Screen(finger.pos);
                     if (finger.isDown && !finger.captureDecided) {
-                        finger.captured = position.x >= captureX && position.x < captureX + captureWidth
-                            && position.y >= captureY && position.y < captureY + captureHeight;
+                        finger.captured = captureRegions.Contains(position.x, position.y);
                         finger.captureDecided = true;
                     }
                     // Gestures outside the gallery belong to Android, including the system IME.
@@ -477,6 +476,10 @@ namespace Touch {
         touch_scale.x = (float) screenX / size.x;
         touch_scale.y = (float) screenY / size.y;
 
+        // No vector growth or heap allocation while the reader holds the
+        // input lock, including the first burst after an idle interval.
+        pendingInput.reserve(1024);
+        drainedInput.reserve(1024);
         initialized = true;
         for (std::size_t i = 0; i < devices.size(); ++i) {
             pthread_t thread{};
@@ -495,6 +498,7 @@ namespace Touch {
         readerThreads.clear();
         pendingInput.clear();
         drainedInput.clear();
+        captureRegions = {};
         for (auto &device: devices) {
             if (!readOnly)
                 ioctl(device.fd, EVIOCGRAB, UNGRAB);
@@ -512,8 +516,14 @@ namespace Touch {
     }
 
     void SetCaptureRegion(float x, float y, float width, float height) {
+        CaptureRegions regions;
+        regions.Add(ImVec2(x,y),ImVec2(x+width,y+height));
+        SetCaptureRegions(regions);
+    }
+
+    void SetCaptureRegions(const CaptureRegions &regions) {
         lock.lock();
-        captureX = x; captureY = y; captureWidth = width; captureHeight = height;
+        captureRegions = regions;
         lock.unlock();
     }
 
