@@ -140,14 +140,19 @@ void FloatingOrb::Draw() {
         draw->PathStroke(Color(accent,(held ?.9f : .65f)*visibility),0,skui::Dp(1.8f));
     }
     impulse_=Scale(impulse_,std::exp(-dt*4.2f));
-    // Analytic wandering targets plus damped inertial offsets. All state is bounded.
+    // A dense orbiting band carries the silhouette; a few slower particles wander inside.
+    // Drag offsets remain damped and bounded around these moving home positions.
+    constexpr unsigned ring_particles=72;
     for(unsigned i=0;i<particles_.size();++i) {
         auto &p=particles_[i];
         float seed=i*2.39996323f;
-        float orbit=std::sqrt((i+.5f)/particles_.size())*.68f;
-        float phase=seed+time_*(.22f+.035f*(i%5));
+        bool outer=i<ring_particles;
+        float orbit=outer ? .76f+.12f*(.5f+.5f*std::sin(seed*1.7f)) :
+            std::sqrt((i-ring_particles+.5f)/(particles_.size()-ring_particles))*.60f;
+        float phase=seed+time_*(outer ? .42f+.025f*(i%5) : .19f+.03f*(i%3));
         ImVec2 home{std::cos(phase)*orbit,std::sin(phase)*orbit};
-        home.x+=.055f*std::sin(time_*.8f+seed*2);home.y+=.055f*std::cos(time_*.65f+seed*3);
+        float wander=outer ? .018f : .045f;
+        home.x+=wander*std::sin(time_*.8f+seed*2);home.y+=wander*std::cos(time_*.65f+seed*3);
         if(motion) {
             p.velocity.x+=(impulse_.x*(.7f+.3f*std::sin(seed))-p.offset.x*12-p.velocity.x*5)*dt;
             p.velocity.y+=(impulse_.y*(.7f+.3f*std::cos(seed))-p.offset.y*12-p.velocity.y*5)*dt;
@@ -157,10 +162,10 @@ void FloatingOrb::Draw() {
         }
         auto point=Add(home,p.offset);
         float length=std::sqrt(point.x*point.x+point.y*point.y);
-        if(length>.78f) point=Scale(point,.78f/length);
+        if(length>.91f) point=Scale(point,.91f/length);
         auto at=Add(center_,Scale(point,r));
-        float size=skui::Dp(.85f+.3f*(i%3));
-        float opacity=(.32f+.16f*(i%4))*visibility;
+        float size=skui::Dp(outer ? .60f+.18f*(i%3) : .75f+.20f*(i%3));
+        float opacity=(outer ? .46f+.12f*(i%4) : .24f+.13f*(i%4))*visibility;
         draw->AddCircleFilled(at,size*2.5f,Color(accent,opacity*.09f),12);
         draw->AddCircleFilled(at,size,Color(accent,opacity),12);
     }

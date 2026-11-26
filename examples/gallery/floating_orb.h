@@ -26,7 +26,7 @@ private:
     skui::ViewportBounds bounds_{};
     ImVec2 center_{}, normalized_{1,.28f};
     ImVec2 impulse_{};
-    std::array<Particle,28> particles_{};
+    std::array<Particle,84> particles_{};
     std::array<Trail,20> trail_{};
     unsigned trail_next_=0;
     ImGuiID active_id_=0;
